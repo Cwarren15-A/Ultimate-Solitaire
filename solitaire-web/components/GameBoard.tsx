@@ -1,4 +1,4 @@
-ause client";
+'use client';
 
 import { useGameStore } from "../lib/game-store";
 import { Card as CardType, PileId, Move } from "../core";

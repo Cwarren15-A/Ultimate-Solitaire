@@ -1,5 +1,6 @@
 {
   "framework": "nextjs",
+  "rootDirectory": "solitaire-web",
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "headers": [
@@ -26,4 +27,4 @@
       ]
     }
   ]
-} 
+}

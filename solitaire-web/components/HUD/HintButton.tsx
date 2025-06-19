@@ -16,6 +16,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [analysisData, setAnalysisData] = useState<EnhancedHintResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [forceShow, setForceShow] = useState(false); // New persistent flag
   
   const { currentState } = useGameStore();
   
@@ -35,12 +36,14 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
       console.log('📈 onHintReceived called with:', hint);
       setAnalysisData(hint);
       setShowAnalysis(true);
+      setForceShow(true); // Force display override
       console.log('🎯 Set showAnalysis to true, analysisData:', !!hint);
       
-      // Auto-hide analysis after 8 seconds for enhanced content
+      // Auto-hide analysis after 10 seconds for enhanced content
       setTimeout(() => {
         setShowAnalysis(false);
-      }, 8000);
+        setForceShow(false);
+      }, 10000);
     },
     onVisualEffect: (effect) => {
       console.log('Visual effect triggered:', effect);
@@ -49,10 +52,12 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
       setErrorMessage(error);
       setAnalysisData(null);
       setShowAnalysis(true);
+      setForceShow(true);
       setTimeout(() => {
         setShowAnalysis(false);
+        setForceShow(false);
         setErrorMessage(null);
-      }, 4000);
+      }, 6000);
     }
   });
   
@@ -148,8 +153,9 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
       {/* Enhanced Analysis Panel - Rendered via Portal */}
       <AnimatePresence>
         {(() => {
-          console.log('🔍 Render check:', { showAnalysis, hasAnalysisData: !!analysisData, hasErrorMessage: !!errorMessage, shouldShow: showAnalysis && (analysisData || errorMessage) });
-          return showAnalysis && (analysisData || errorMessage) && typeof document !== 'undefined';
+          const shouldShow = (showAnalysis || forceShow) && (analysisData || errorMessage) && typeof document !== 'undefined';
+          console.log('🔍 Render check:', { showAnalysis, forceShow, hasAnalysisData: !!analysisData, hasErrorMessage: !!errorMessage, shouldShow });
+          return shouldShow;
         })() && createPortal(
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
@@ -261,7 +267,11 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
 
             {/* Close button */}
             <button
-              onClick={() => setShowAnalysis(false)}
+              onClick={() => {
+                setShowAnalysis(false);
+                setForceShow(false);
+                console.log('🚫 Manual close triggered');
+              }}
               className="absolute top-2 right-2 text-gray-400 hover:text-white text-lg w-6 h-6 
                          flex items-center justify-center rounded hover:bg-gray-700/50"
             >

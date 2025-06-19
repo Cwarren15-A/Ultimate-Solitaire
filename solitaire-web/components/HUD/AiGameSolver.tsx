@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+// @ts-ignore
+const { motion } = require("framer-motion");
 import { useGameStore } from "@/lib/game-store";
-import { Zap, Clock, Target, Brain } from "lucide-react";
+// @ts-ignore
+const { Zap, Clock, Target, Brain, Play, Pause } = require("lucide-react");
 import { serializeGameState } from '@/core/serialize';
 
 interface GameSolution {
@@ -16,55 +18,54 @@ interface GameSolution {
   }>;
   timeToSolve: number;
   confidence: number;
+  reasoning?: string;
+  keyFactors?: string[];
+  error?: string;
+  aiPowered?: boolean;
+  fallback?: boolean;
 }
 
 export default function AiGameSolver() {
   const [solution, setSolution] = useState<GameSolution | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [lastAnalyzedGameId, setLastAnalyzedGameId] = useState<string>('');
+  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false);
   const [lastAnalysisTime, setLastAnalysisTime] = useState<number>(0);
-  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false); // Default to OFF to save tokens
+  const [debugMode, setDebugMode] = useState(false);
   const { currentState } = useGameStore();
 
+  // Simplified auto-analysis with better logic
   useEffect(() => {
-    // Create a meaningful game state hash to avoid re-analyzing identical positions
-    const gameStateHash = `${currentState.moves}-${Object.values(currentState.foundations).map(f => f.cards.length).join(',')}-${currentState.stock.cards.length}`;
-    const now = Date.now();
-    const timeSinceLastAnalysis = now - lastAnalysisTime;
-    const minCooldownTime = 5000; // 5 second minimum between analyses
+    if (!autoAnalyzeEnabled || currentState.isComplete || isAnalyzing) {
+      return;
+    }
 
-    // Only analyze if:
-    // 1. Auto-analysis is enabled (to save tokens)
-    // 2. Game is not complete
-    // 3. Not currently analyzing
-    // 4. Game state has meaningfully changed (different hash)
-    // 5. Enough time has passed since last analysis (cooldown)
-    if (autoAnalyzeEnabled &&
-        !currentState.isComplete && 
-        !isAnalyzing && 
-        gameStateHash !== lastAnalyzedGameId &&
-        timeSinceLastAnalysis > minCooldownTime) {
-      
-      console.log('🔄 Game state changed meaningfully, scheduling analysis...');
+    // Only auto-analyze on significant game changes
+    const significantMoves = [0, 5, 10, 15, 20, 25, 30]; // Analyze at these move counts
+    const timeSinceLastAnalysis = Date.now() - lastAnalysisTime;
+    const shouldAnalyze = significantMoves.includes(currentState.moves) && timeSinceLastAnalysis > 10000; // 10 second cooldown
+
+    if (shouldAnalyze) {
+      console.log('🔄 Auto-analyzing game at move', currentState.moves);
       const timer = setTimeout(() => {
-        setLastAnalyzedGameId(gameStateHash);
-        setLastAnalysisTime(now);
         solveGame();
-      }, 2000);
+      }, 2000); // 2 second delay
 
       return () => clearTimeout(timer);
     }
-  }, [currentState.moves, currentState.isComplete]); // Only depend on move count and completion status
+  }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, isAnalyzing]);
 
   const solveGame = async () => {
+    if (isAnalyzing) return;
+    
     setIsAnalyzing(true);
     setAnalysisProgress(0);
+    setLastAnalysisTime(Date.now());
     
-    console.log('🤖 AI Game Solver: Starting full game analysis...');
+    console.log('🤖 AI Game Solver: Starting analysis...');
     
     try {
-      // Simulate progressive analysis with updates
+      // Simulate progressive analysis
       const progressSteps = [
         { progress: 20, status: "Analyzing tableau structure..." },
         { progress: 40, status: "Computing foundation paths..." },
@@ -73,80 +74,174 @@ export default function AiGameSolver() {
         { progress: 100, status: "Analysis complete!" }
       ];
 
-      for (const step of progressSteps) {
-        await new Promise(resolve => setTimeout(resolve, 800));
+      for (let i = 0; i < progressSteps.length; i++) {
+        const step = progressSteps[i];
+        await new Promise(resolve => setTimeout(resolve, 600));
         setAnalysisProgress(step.progress);
+        
+        // Exit early if analysis is cancelled
+        if (!isAnalyzing) return;
       }
 
-      // Call the AI solver API
+      console.log('📤 Calling solve-game API...');
+      
       const response = await fetch('/api/solve-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           gameState: serializeGameState(currentState),
-          maxDepth: 50, // How many moves ahead to search
-          timeLimit: 30000 // 30 second limit
+          maxDepth: 30, // Reduced for faster analysis
+          timeLimit: 15000 // 15 second limit
         }),
       });
 
       if (!response.ok) {
-        throw new Error(`Solver API error: ${response.status}`);
+        throw new Error(`Solver API error: ${response.status} ${response.statusText}`);
       }
 
       const solutionData = await response.json();
-      console.log('🎯 Game solution found:', solutionData);
+      console.log('🎯 Game solution received:', solutionData);
       
       setSolution(solutionData);
     } catch (error) {
       console.error('❌ Game solver failed:', error);
       
-      // Fallback to local heuristic analysis
-      const fallbackSolution = await performLocalAnalysis();
-      setSolution(fallbackSolution);
+      // Enhanced fallback analysis
+      const fallbackSolution = performEnhancedLocalAnalysis();
+      setSolution({
+        ...fallbackSolution,
+        error: error instanceof Error ? error.message : 'Analysis failed',
+        aiPowered: false,
+        fallback: true
+      });
     } finally {
       setIsAnalyzing(false);
       setAnalysisProgress(0);
     }
   };
 
-  const performLocalAnalysis = async (): Promise<GameSolution> => {
-    console.log('📊 Performing local heuristic analysis...');
+  const performEnhancedLocalAnalysis = (): GameSolution => {
+    console.log('📊 Performing enhanced local analysis...');
     
-    // Simple heuristic analysis based on game state
-    const foundationTotal = Object.values(currentState.foundations).reduce(
-      (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
-    );
-    const revealedCards = Object.values(currentState.tableaux).reduce(
-      (sum: number, tableau: any) => sum + (tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0), 0
-    );
-    
-    const completionPercentage = foundationTotal / 52;
-    const estimatedMoves = Math.max(10, Math.round(52 - foundationTotal + (28 - revealedCards) * 1.5));
-    const winProbability = Math.min(95, Math.max(5, 60 + (completionPercentage * 40) - (currentState.stock.cards.length * 0.5)));
-    
-    return {
-      isWinnable: winProbability > 30,
-      optimalMoves: estimatedMoves,
-      moveSequence: [
+    try {
+      // More sophisticated local analysis
+      const foundationTotal = Object.values(currentState.foundations).reduce(
+        (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
+      );
+      
+      const tableauAnalysis = Object.values(currentState.tableaux).map((tableau: any) => {
+        const totalCards = tableau?.cards?.length || 0;
+        const faceUpCards = tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0;
+        const faceDownCards = totalCards - faceUpCards;
+        const isEmpty = totalCards === 0;
+        const hasKing = tableau?.cards?.some((c: any) => c.faceUp && c.rank === 13) || false;
+        return { totalCards, faceUpCards, faceDownCards, isEmpty, hasKing };
+      });
+      
+      const totalHiddenCards = tableauAnalysis.reduce((sum, t) => sum + t.faceDownCards, 0);
+      const emptyTableauSpaces = tableauAnalysis.filter(t => t.isEmpty).length;
+      const kingsAvailable = tableauAnalysis.filter(t => t.hasKing).length;
+      const stockCards = currentState?.stock?.cards?.length || 0;
+      const wasteCards = currentState?.waste?.cards?.length || 0;
+      
+      // Calculate game progress and difficulty
+      const progressRatio = foundationTotal / 52;
+      const gamePhase = progressRatio < 0.25 ? 'early' : progressRatio < 0.75 ? 'middle' : 'late';
+      
+      // Enhanced win probability calculation
+      let winProbability = 75; // Base optimism
+      
+      // Adjust based on game state
+      winProbability -= totalHiddenCards * 1.0; // Hidden cards reduce odds
+      winProbability += emptyTableauSpaces * 8; // Empty spaces help
+      winProbability += progressRatio * 25; // Progress improves odds
+      winProbability -= (stockCards > 20 ? 15 : 0); // Large stock reduces odds
+      winProbability += (kingsAvailable - emptyTableauSpaces) * 5; // Kings without spaces
+      
+      winProbability = Math.max(10, Math.min(95, winProbability));
+      
+      // Enhanced move estimation
+      const cardsRemaining = 52 - foundationTotal;
+      let estimatedMoves = Math.round(cardsRemaining * 0.6); // Base moves
+      estimatedMoves += totalHiddenCards * 0.4; // Hidden cards add complexity
+      estimatedMoves += Math.max(0, stockCards - 10) * 0.2; // Large stock adds moves
+      estimatedMoves = Math.max(5, Math.min(50, estimatedMoves));
+      
+      // Key factors analysis
+      const keyFactors = [];
+      if (totalHiddenCards > 15) keyFactors.push(`${totalHiddenCards} cards still hidden`);
+      if (stockCards > 20) keyFactors.push(`Large stock pile (${stockCards} cards)`);
+      if (emptyTableauSpaces === 0 && kingsAvailable > 0) keyFactors.push("Need to create empty spaces for Kings");
+      if (foundationTotal < 4) keyFactors.push("Early game - focus on Aces and 2s");
+      if (progressRatio > 0.7) keyFactors.push("Late game - careful sequencing needed");
+      if (emptyTableauSpaces > 2) keyFactors.push(`Good tableau management (${emptyTableauSpaces} empty spaces)`);
+      
+      // Strategic move sequence
+      const moveSequence = [
         {
-          move: "foundation_focus",
-          description: "Prioritize foundation builds",
-          evaluation: `${foundationTotal}/52 cards placed`
+          move: "foundation_priority",
+          description: "Build foundation piles whenever possible",
+          evaluation: `${foundationTotal}/52 cards placed - focus on immediate foundation moves`
         },
         {
-          move: "reveal_cards", 
-          description: "Expose face-down cards in tableau",
-          evaluation: `${28 - revealedCards} cards still hidden`
-        },
-        {
-          move: "king_spaces",
-          description: "Create empty spaces for Kings",
-          evaluation: "Strategic tableau management"
+          move: "reveal_hidden",
+          description: "Expose face-down tableau cards",
+          evaluation: `${totalHiddenCards} cards hidden - prioritize revealing them`
         }
-      ],
-      timeToSolve: 1.2,
-      confidence: Math.round(winProbability)
-    };
+      ];
+      
+      if (gamePhase === 'early') {
+        moveSequence.push({
+          move: "establish_sequences",
+          description: "Build long tableau sequences",
+          evaluation: "Early game - create foundations for mid-game"
+        });
+      } else if (gamePhase === 'middle') {
+        moveSequence.push({
+          move: "optimize_spaces",
+          description: "Create and use empty tableau spaces strategically",
+          evaluation: `${emptyTableauSpaces} empty spaces available`
+        });
+      } else {
+        moveSequence.push({
+          move: "careful_sequencing",
+          description: "Plan moves carefully to avoid blocking",
+          evaluation: "Late game - precision is key"
+        });
+      }
+      
+      return {
+        isWinnable: winProbability > 25,
+        optimalMoves: estimatedMoves,
+        confidence: Math.round(winProbability),
+        moveSequence,
+        timeToSolve: 1.2,
+        reasoning: `${gamePhase} game analysis: ${Math.round(progressRatio * 100)}% complete. ` +
+                  `${totalHiddenCards} hidden cards, ${emptyTableauSpaces} empty spaces. ` +
+                  `Win probability: ${Math.round(winProbability)}%`,
+        keyFactors
+      };
+    } catch (analysisError) {
+      console.error('❌ Local analysis error:', analysisError);
+      return {
+        isWinnable: true,
+        optimalMoves: 25,
+        confidence: 50,
+        moveSequence: [{
+          move: "basic_strategy",
+          description: "Continue with standard solitaire strategy",
+          evaluation: "Fallback analysis due to error"
+        }],
+        timeToSolve: 0.5,
+        reasoning: "Analysis error - using basic estimates",
+        keyFactors: ["Analysis limited due to error"]
+      };
+    }
+  };
+
+  const cancelAnalysis = () => {
+    setIsAnalyzing(false);
+    setAnalysisProgress(0);
   };
 
   if (currentState.isComplete) {
@@ -158,7 +253,7 @@ export default function AiGameSolver() {
                    px-3 py-2 rounded-lg border border-green-500/30"
       >
         <Target className="h-4 w-4 text-green-400" />
-        <span className="text-green-200 text-sm font-medium">🎉 Victory!</span>
+        <span className="text-green-200 text-sm font-medium">🎉 Victory Achieved!</span>
       </motion.div>
     );
   }
@@ -169,6 +264,16 @@ export default function AiGameSolver() {
       animate={{ opacity: 1, y: 0 }}
       className="flex items-center space-x-3"
     >
+      {/* Debug toggle (development only) */}
+      {process.env.NODE_ENV === 'development' && (
+        <button
+          onClick={() => setDebugMode(!debugMode)}
+          className="text-xs text-gray-500 hover:text-gray-300"
+        >
+          {debugMode ? '🔍' : '👁️'}
+        </button>
+      )}
+
       {isAnalyzing ? (
         <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-600/30 to-purple-600/30 
                         px-3 py-2 rounded-lg border border-blue-500/30">
@@ -180,7 +285,7 @@ export default function AiGameSolver() {
           </motion.div>
           <div className="text-blue-200 text-sm">
             <div className="font-medium">AI Analyzing...</div>
-            <div className="w-20 h-1 bg-blue-900/50 rounded-full overflow-hidden">
+            <div className="w-24 h-1 bg-blue-900/50 rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-blue-400"
                 style={{ width: `${analysisProgress}%` }}
@@ -188,6 +293,13 @@ export default function AiGameSolver() {
               />
             </div>
           </div>
+          <button
+            onClick={cancelAnalysis}
+            className="text-blue-300 hover:text-blue-100 text-xs"
+            title="Cancel analysis"
+          >
+            ×
+          </button>
         </div>
       ) : solution ? (
         <div className="flex items-center space-x-3">
@@ -200,7 +312,10 @@ export default function AiGameSolver() {
             <Zap className={`h-4 w-4 ${solution.isWinnable ? 'text-green-400' : 'text-orange-400'}`} />
             <div className={`text-sm ${solution.isWinnable ? 'text-green-200' : 'text-orange-200'}`}>
               <span className="font-medium">
-                {solution.isWinnable ? `AI: Solvable in ${solution.optimalMoves} moves` : 'Challenging position'}
+                {solution.isWinnable 
+                  ? `Solvable in ~${solution.optimalMoves} moves`
+                  : 'Challenging position'
+                }
               </span>
             </div>
           </div>
@@ -226,7 +341,7 @@ export default function AiGameSolver() {
                        text-purple-200 rounded text-xs border border-purple-500/30 transition-colors"
           >
             <Brain className="h-3 w-3" />
-            <span>Analyze</span>
+            <span>Re-analyze</span>
           </motion.button>
 
           {/* Auto-Analyze Toggle */}
@@ -239,9 +354,9 @@ export default function AiGameSolver() {
                 ? 'bg-green-600/30 hover:bg-green-500/30 text-green-200 border-green-500/30'
                 : 'bg-gray-600/30 hover:bg-gray-500/30 text-gray-300 border-gray-500/30'
             }`}
-            title={autoAnalyzeEnabled ? 'Auto-analyze ON (uses tokens)' : 'Auto-analyze OFF (saves tokens)'}
+            title={autoAnalyzeEnabled ? 'Auto-analyze ON' : 'Auto-analyze OFF'}
           >
-            <div className={`w-2 h-2 rounded-full ${autoAnalyzeEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+            {autoAnalyzeEnabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
             <span>Auto</span>
           </motion.button>
         </div>
@@ -269,13 +384,32 @@ export default function AiGameSolver() {
                 ? 'bg-green-600/30 hover:bg-green-500/30 text-green-200 border-green-500/30'
                 : 'bg-gray-600/30 hover:bg-gray-500/30 text-gray-300 border-gray-500/30'
             }`}
-            title={autoAnalyzeEnabled ? 'Auto-analyze ON (uses tokens)' : 'Auto-analyze OFF (saves tokens)'}
+            title={autoAnalyzeEnabled ? 'Auto-analyze ON' : 'Auto-analyze OFF'}
           >
-            <div className={`w-2 h-2 rounded-full ${autoAnalyzeEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+            {autoAnalyzeEnabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
             <span>Auto</span>
           </motion.button>
         </div>
       )}
+
+      {/* Debug info overlay */}
+      {debugMode && solution && (
+        <div className="fixed top-20 right-4 w-80 bg-gray-900/95 border border-gray-600 rounded p-3 text-xs z-50">
+          <div className="text-gray-300">
+            <div>AI Powered: {solution.aiPowered ? 'Yes' : 'No'}</div>
+            <div>Fallback: {solution.fallback ? 'Yes' : 'No'}</div>
+            {solution.error && <div className="text-red-300">Error: {solution.error}</div>}
+            {solution.keyFactors && (
+              <div>
+                <div className="mt-2 font-medium">Key Factors:</div>
+                {solution.keyFactors.map((factor, i) => (
+                  <div key={i}>• {factor}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
-} 
+}

@@ -1,111 +1,129 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ENHANCED_SOLITAIRE_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 
-const GAME_SOLVER_PROMPT = `Analyze this Solitaire game quickly. Return JSON:
-{
-  "isWinnable": boolean,
-  "optimalMoves": number (realistic estimate 15-35),
-  "confidence": number (0-100)
+// Simplified, consistent response structure
+interface HintResponse {
+  success: boolean;
+  move?: {
+    description: string;
+    from?: string;
+    to?: string;
+    cards?: string[];
+    reasoning?: string;
+  };
+  analysis?: {
+    winProbability: string;
+    deadlockRisk: 'low' | 'medium' | 'high';
+    strategicInsight?: string;
+  };
+  hintsUsed: number;
+  hintsRemaining: number;
+  message: string;
+  error?: string;
+  debug?: any; // For debugging
 }
 
-Focus on: foundation progress, blocked cards, empty spaces.`;
+const SIMPLIFIED_SOLVER_PROMPT = `Analyze this Solitaire game quickly and return JSON only:
+{
+  "isWinnable": boolean,
+  "optimalMoves": number (realistic estimate 10-40),
+  "confidence": number (0-100),
+  "reasoning": "brief explanation",
+  "keyFactors": ["factor1", "factor2"]
+}
+
+Focus on: foundation progress, blocked cards, empty spaces, hidden cards.`;
+
+interface SolverResponse {
+  isWinnable: boolean;
+  optimalMoves: number;
+  confidence: number;
+  reasoning: string;
+  keyFactors: string[];
+  timeToSolve: number;
+  aiPowered: boolean;
+  fallback?: boolean;
+  error?: string;
+}
 
 export async function POST(request: NextRequest) {
   console.log('🧠 AI Game Solver API called');
   
-  let body, gameState, state;
+  let body: any;
+  let gameState: string;
+  let parsedState: any;
   
-  // Parse request body first
+  // Parse request body
   try {
     body = await request.json();
     gameState = body.gameState;
+    
+    if (!gameState) {
+      throw new Error('Missing gameState in request body');
+    }
+    
+    console.log('📦 Request received:', {
+      gameStateLength: gameState.length,
+      maxDepth: body.maxDepth || 30,
+      timeLimit: body.timeLimit || 15000
+    });
+    
   } catch (parseError) {
     console.error('❌ Failed to parse request body:', parseError);
-    return NextResponse.json({
-      error: 'Invalid request body',
-      isWinnable: false,
-      optimalMoves: 25,
-      confidence: 50,
-      timeToSolve: 0.1,
-      aiPowered: false,
-      fallback: true
-    }, { status: 200 });
+    return NextResponse.json(createErrorResponse('Invalid request body'), { status: 400 });
   }
 
-  const { maxDepth = 50, timeLimit = 30000 } = body;
+  const { maxDepth = 30, timeLimit = 15000 } = body;
   
   try {
-    
-    console.log('🎮 Solving game state:', { 
-      gameStateLength: gameState?.length,
-      maxDepth,
-      timeLimit 
-    });
-
-    // Parse game state
+    // Parse and validate game state
     try {
-      state = JSON.parse(gameState);
-      console.log('🎮 Parsed game state structure:', {
-        hasFoundations: !!state?.foundations,
-        hasStock: !!state?.stock,
-        hasTableaux: !!state?.tableaux,
-        foundationKeys: state?.foundations ? Object.keys(state.foundations) : [],
-        stockCardCount: state?.stock?.cards?.length || 0,
-        tableauCount: state?.tableaux ? Object.keys(state.tableaux).length : 0
-      });
-
-      // Validate essential game state properties
-      if (!state?.foundations || !state?.stock || !state?.tableaux) {
-        console.error('❌ Invalid game state: missing essential properties');
-        const fallbackSolution = performLocalGameAnalysis(state);
-        return NextResponse.json({
-          ...fallbackSolution,
-          timeToSolve: 0.5,
-          aiPowered: false,
-          fallback: true,
-          error: 'Invalid game state structure - using fallback analysis'
-        });
+      parsedState = JSON.parse(gameState);
+      console.log('✅ Game state parsed successfully');
+      
+      // Basic validation
+      if (!parsedState?.foundations || !parsedState?.stock || !parsedState?.tableaux) {
+        throw new Error('Invalid game state structure');
       }
+      
     } catch (parseError) {
-      console.error('Failed to parse game state:', parseError);
+      console.error('❌ Invalid game state:', parseError);
+      const fallbackSolution = performLocalGameAnalysis(null);
       return NextResponse.json({
-        error: 'Invalid game state data'
-      }, { status: 400 });
+        ...fallbackSolution,
+        error: 'Invalid game state - using fallback analysis',
+        fallback: true
+      });
     }
 
     // Get OpenAI API key
     const openaiApiKey = process.env.OPENAI_API_KEY;
     if (!openaiApiKey) {
       console.error('❌ OpenAI API key not found');
-      // Fall back to local analysis immediately
-      const fallbackSolution = performLocalGameAnalysis(state);
+      const fallbackSolution = performLocalGameAnalysis(parsedState);
       return NextResponse.json({
         ...fallbackSolution,
-        timeToSolve: 0.8,
-        aiPowered: false,
-        fallback: true,
-        error: 'OpenAI API key not found'
+        error: 'OpenAI API key not configured',
+        fallback: true
       });
     }
 
-    // Create simplified prompt for AI solver
-    const solverPrompt = `${GAME_SOLVER_PROMPT}
-
-Foundation progress: ${Object.values(state?.foundations || {}).map((f: any) => f?.cards?.length || 0).join(',')}
-Stock cards: ${state?.stock?.cards?.length || 0}
-Visible tableau: ${Object.values(state?.tableaux || {}).map((t: any) => t?.cards?.filter((c: any) => c.faceUp)?.length || 0).join(',')}`;
+    // Create optimized prompt for solver
+    const gameStateSummary = createGameStateSummary(parsedState);
+    const solverPrompt = `${SIMPLIFIED_SOLVER_PROMPT}\n\nGame State Summary:\n${gameStateSummary}`;
 
     console.log('🤖 Making OpenAI API call for game solving...');
+    console.log('📝 Prompt preview:', solverPrompt.substring(0, 200) + '...');
     
-    // Call OpenAI for complete game analysis
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call OpenAI with timeout
+    const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
-              body: JSON.stringify({
-          model: 'gpt-4o-mini',
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',
@@ -116,93 +134,128 @@ Visible tableau: ${Object.values(state?.tableaux || {}).map((t: any) => t?.cards
             content: solverPrompt
           }
         ],
-                 max_completion_tokens: 800, // Increased for more detailed analysis
+        max_completion_tokens: 800, // Increased as requested
+        temperature: 0.2, // Lower temperature for more consistent analysis
       }),
     });
 
+    // Add timeout to OpenAI request
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('OpenAI request timeout')), timeLimit);
+    });
+
+    const openaiResponse = await Promise.race([openaiPromise, timeoutPromise]) as Response;
+
     if (!openaiResponse.ok) {
       const errorData = await openaiResponse.json();
-      console.error('OpenAI API error:', errorData);
+      console.error('❌ OpenAI API error:', errorData);
       throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const openaiData = await openaiResponse.json();
-    console.log('✅ OpenAI game solver response received, usage:', openaiData.usage);
+    console.log('✅ OpenAI game solver response received');
     
-    // Parse the AI analysis
     const aiAnalysis = openaiData.choices[0]?.message?.content;
     if (!aiAnalysis) {
       throw new Error('No analysis returned from OpenAI');
     }
 
-    // Try to parse structured JSON response
-    let parsedSolution;
+    console.log('🎯 AI Analysis preview:', aiAnalysis.substring(0, 150) + '...');
+
+    // Parse AI response
+    let aiSolution: any = null;
     try {
       const jsonMatch = aiAnalysis.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        parsedSolution = JSON.parse(jsonMatch[0]);
+        aiSolution = JSON.parse(jsonMatch[0]);
+        console.log('✅ Successfully parsed AI JSON response');
       }
     } catch (parseError) {
-      console.log('Could not parse structured solution, using text analysis');
+      console.log('⚠️ Could not parse structured response, using text analysis');
     }
 
     // Enhanced local analysis to supplement AI
-    const localAnalysis = performLocalGameAnalysis(state);
+    const localAnalysis = performLocalGameAnalysis(parsedState);
     
     // Combine AI analysis with local heuristics
-    const solution = {
-      isWinnable: parsedSolution?.isWinnable ?? localAnalysis.isWinnable,
-      optimalMoves: parsedSolution?.optimalMoves ?? localAnalysis.estimatedMoves,
-      confidence: parsedSolution?.confidence ?? localAnalysis.confidence,
-      moveSequence: parsedSolution?.moveSequence ?? localAnalysis.moveSequence,
-      timeToSolve: parseFloat((Date.now() % 10000 / 1000).toFixed(1)), // Simulate solve time
-      reasoning: parsedSolution?.reasoning ?? aiAnalysis.substring(0, 300),
-      deadlockRisk: parsedSolution?.deadlockRisk ?? localAnalysis.deadlockRisk,
-      keyFactors: parsedSolution?.keyFactors ?? localAnalysis.keyFactors,
-      aiPowered: true,
-      analysisDepth: maxDepth
+    const solution: SolverResponse = {
+      isWinnable: aiSolution?.isWinnable ?? localAnalysis.isWinnable,
+      optimalMoves: aiSolution?.optimalMoves ?? localAnalysis.optimalMoves,
+      confidence: aiSolution?.confidence ?? localAnalysis.confidence,
+      reasoning: aiSolution?.reasoning ?? localAnalysis.reasoning,
+      keyFactors: aiSolution?.keyFactors ?? localAnalysis.keyFactors,
+      timeToSolve: parseFloat((Date.now() % 5000 / 1000).toFixed(1)), // Simulate solve time
+      aiPowered: true
     };
 
-    console.log('🎯 Complete game solution generated:', solution);
+    // Validate AI response values
+    solution.optimalMoves = Math.max(5, Math.min(50, solution.optimalMoves));
+    solution.confidence = Math.max(0, Math.min(100, solution.confidence));
+
+    console.log('🎯 Final solution:', {
+      isWinnable: solution.isWinnable,
+      optimalMoves: solution.optimalMoves,
+      confidence: solution.confidence,
+      aiPowered: solution.aiPowered
+    });
+
     return NextResponse.json(solution);
 
   } catch (error) {
     console.error('❌ Game solver error:', error);
     
-    // Always provide fallback analysis even if AI fails
+    // Always provide fallback analysis
     try {
-      if (state) {
-        const fallbackSolution = performLocalGameAnalysis(state);
-        return NextResponse.json({
-          ...fallbackSolution,
-          timeToSolve: 0.8,
-          aiPowered: false,
-          fallback: true,
-          error: `AI solver unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`
-        });
-      } else {
-        throw new Error('No game state available for fallback analysis');
-      }
+      const fallbackSolution = performLocalGameAnalysis(parsedState);
+      return NextResponse.json({
+        ...fallbackSolution,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        aiPowered: false,
+        fallback: true
+      });
     } catch (fallbackError) {
       console.error('❌ Fallback analysis failed:', fallbackError);
-      return NextResponse.json({
-        error: 'Complete solver failure',
-        isWinnable: false,
-        optimalMoves: 25,
-        confidence: 50,
-        timeToSolve: 0.5,
-        aiPowered: false,
-        fallback: true,
-        message: 'Using basic estimates due to analysis failure'
-      }, { status: 200 }); // Return 200 instead of 500 to avoid frontend errors
+      return NextResponse.json(createErrorResponse('Complete analysis failure'));
     }
   }
 }
 
-function performLocalGameAnalysis(state: any) {
+function createGameStateSummary(state: any): string {
+  try {
+    const foundationTotal = Object.values(state?.foundations || {}).reduce(
+      (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
+    );
+    
+    const stockCards = state?.stock?.cards?.length || 0;
+    const wasteCards = state?.waste?.cards?.length || 0;
+    
+    const tableauInfo = Object.values(state?.tableaux || {}).map((tableau: any, index) => {
+      const totalCards = tableau?.cards?.length || 0;
+      const faceUpCards = tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0;
+      const faceDownCards = totalCards - faceUpCards;
+      return `T${index + 1}: ${totalCards} cards (${faceDownCards} down, ${faceUpCards} up)`;
+    });
+    
+    return [
+      `Foundation: ${foundationTotal}/52 cards`,
+      `Stock: ${stockCards} cards, Waste: ${wasteCards} cards`,
+      `Tableaux: ${tableauInfo.join(', ')}`,
+      `Moves: ${state?.moves || 0}, Draw mode: ${state?.drawMode || 1}`
+    ].join('\n');
+    
+  } catch (error) {
+    return 'Game state summary unavailable';
+  }
+}
+
+function performLocalGameAnalysis(state: any): SolverResponse {
   console.log('📊 Performing local game analysis...');
   
   try {
+    if (!state) {
+      return createErrorResponse('No game state available');
+    }
+    
     // Calculate game progress metrics
     const foundationTotal = Object.values(state?.foundations || {}).reduce(
       (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
@@ -212,98 +265,74 @@ function performLocalGameAnalysis(state: any) {
       const totalCards = tableau?.cards?.length || 0;
       const faceUpCards = tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0;
       const faceDownCards = totalCards - faceUpCards;
-      return { totalCards, faceUpCards, faceDownCards };
+      const isEmpty = totalCards === 0;
+      return { totalCards, faceUpCards, faceDownCards, isEmpty };
     });
     
     const totalHiddenCards = tableauAnalysis.reduce((sum, t) => sum + t.faceDownCards, 0);
+    const emptySpaces = tableauAnalysis.filter(t => t.isEmpty).length;
     const stockCards = state?.stock?.cards?.length || 0;
-    const wasteCards = state?.waste?.cards?.length || 0;
+    const moves = state?.moves || 0;
     
-    // Solvability heuristics
+    // Enhanced solvability heuristics
     const progressRatio = foundationTotal / 52;
-    const hiddenCardPenalty = totalHiddenCards * 1.5;
-    const stockCyclePenalty = stockCards > 15 ? 10 : 0;
-    
-    // Estimate optimal moves (much more realistic)
-    const cardsRemaining = 52 - foundationTotal;
-    const baseMovesNeeded = cardsRemaining * 0.5; // Each card typically needs ~0.5 moves
-    const hiddenCardMoves = totalHiddenCards * 0.3; // Hidden cards add complexity
-    const estimatedMoves = Math.max(8, Math.min(35, Math.round(baseMovesNeeded + hiddenCardMoves)));
+    const gamePhase = progressRatio < 0.3 ? 'early' : progressRatio < 0.7 ? 'middle' : 'late';
     
     // Win probability calculation
-    let winProbability = 85; // Base optimism
-    winProbability -= hiddenCardPenalty * 1.2; // Hidden cards reduce odds
-    winProbability -= stockCyclePenalty; // Large stock reduces odds
-    winProbability += progressRatio * 30; // Progress improves odds
-    winProbability = Math.max(5, Math.min(95, winProbability));
+    let winProbability = 70; // Base optimism
     
-    // Identify key factors
+    // Adjust based on various factors
+    winProbability += progressRatio * 25; // Progress bonus
+    winProbability -= totalHiddenCards * 1.5; // Hidden cards penalty
+    winProbability += emptySpaces * 10; // Empty spaces bonus
+    winProbability -= (stockCards > 20 ? 15 : 0); // Large stock penalty
+    winProbability -= (moves > 100 ? 20 : 0); // Too many moves penalty
+    
+    winProbability = Math.max(15, Math.min(90, winProbability));
+    
+    // Estimate optimal moves
+    const cardsRemaining = 52 - foundationTotal;
+    let estimatedMoves = Math.round(cardsRemaining * 0.7); // Base moves per card
+    estimatedMoves += totalHiddenCards * 0.4; // Hidden cards add complexity
+    estimatedMoves += Math.max(0, stockCards - 15) * 0.3; // Large stock adds moves
+    estimatedMoves = Math.max(8, Math.min(45, estimatedMoves));
+    
+    // Key factors identification
     const keyFactors = [];
-    if (totalHiddenCards > 15) keyFactors.push("Many cards still hidden");
-    if (stockCards > 18) keyFactors.push("Large stock pile remaining");
-    if (foundationTotal < 4) keyFactors.push("Early game - build foundations");
-    if (progressRatio > 0.5) keyFactors.push("Good progress - maintain momentum");
-    
-    // Generate strategic move sequence
-    const moveSequence = [
-      {
-        move: "foundation_priority",
-        description: "Build foundation piles whenever possible",
-        evaluation: `${foundationTotal}/52 cards placed - ${Math.round(progressRatio * 100)}% complete`
-      },
-      {
-        move: "expose_hidden",
-        description: "Reveal face-down tableau cards",
-        evaluation: `${totalHiddenCards} cards still hidden`
-      },
-      {
-        move: "king_management", 
-        description: "Create empty tableau spaces for Kings",
-        evaluation: "Essential for late-game flexibility"
-      },
-      {
-        move: "stock_cycling",
-        description: "Efficiently cycle through stock pile",
-        evaluation: `${stockCards} cards in stock`
-      }
-    ];
+    if (gamePhase === 'early') keyFactors.push("Early game - establish foundations");
+    if (totalHiddenCards > 12) keyFactors.push(`${totalHiddenCards} cards still hidden`);
+    if (emptySpaces === 0) keyFactors.push("No empty tableau spaces available");
+    if (stockCards > 15) keyFactors.push(`Large stock pile (${stockCards} cards)`);
+    if (progressRatio > 0.6) keyFactors.push("Good progress - maintain momentum");
+    if (moves > 50) keyFactors.push("Many moves played - be strategic");
     
     return {
-      isWinnable: winProbability > 25,
-      estimatedMoves,
+      isWinnable: winProbability > 30,
+      optimalMoves: estimatedMoves,
       confidence: Math.round(winProbability),
-      moveSequence,
-      deadlockRisk: winProbability < 40 ? "high" : winProbability < 70 ? "medium" : "low",
+      reasoning: `${gamePhase} game analysis: ${Math.round(progressRatio * 100)}% complete, ` +
+                `${totalHiddenCards} hidden cards, ${emptySpaces} empty spaces. ` +
+                `Estimated ${estimatedMoves} moves remaining.`,
       keyFactors,
-      metrics: {
-        foundationTotal,
-        totalHiddenCards,
-        stockCards,
-        progressRatio: Math.round(progressRatio * 100)
-      }
+      timeToSolve: 0.8,
+      aiPowered: false
     };
+    
   } catch (analysisError) {
     console.error('❌ Local analysis error:', analysisError);
-    // Return basic safe defaults
-    return {
-      isWinnable: true,
-      estimatedMoves: 25,
-      confidence: 60,
-      moveSequence: [
-        {
-          move: "basic_strategy",
-          description: "Look for foundation moves",
-          evaluation: "Basic fallback advice"
-        }
-      ],
-      deadlockRisk: "medium",
-      keyFactors: ["Analysis limited due to error"],
-      metrics: {
-        foundationTotal: 0,
-        totalHiddenCards: 20,
-        stockCards: 24,
-        progressRatio: 0
-      }
-    };
+    return createErrorResponse('Local analysis failed');
   }
-} 
+}
+
+function createErrorResponse(message: string): SolverResponse {
+  return {
+    isWinnable: true,
+    optimalMoves: 25,
+    confidence: 50,
+    reasoning: message,
+    keyFactors: ["Analysis error - using safe estimates"],
+    timeToSolve: 0.1,
+    aiPowered: false,
+    error: message
+  };
+}

@@ -46,7 +46,7 @@ export default function AiGameSolver() {
       moves: currentState.moves
     });
 
-    if (!autoAnalyzeEnabled || currentState.isComplete || isAnalyzing) {
+    if (!autoAnalyzeEnabled || currentState.isComplete || analysisRef.current) {
       console.log('🚫 Auto-analysis skipped due to conditions');
       return;
     }
@@ -74,7 +74,7 @@ export default function AiGameSolver() {
         clearTimeout(timer);
       };
     }
-  }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, isAnalyzing]);
+  }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete]);
 
   const solveGame = async () => {
     if (isAnalyzing || analysisRef.current) {
@@ -106,10 +106,10 @@ export default function AiGameSolver() {
         await new Promise(resolve => setTimeout(resolve, 600));
         setAnalysisProgress(step.progress);
         
-        // Exit early if analysis is cancelled
-        if (!isAnalyzing || !analysisRef.current) {
-          console.log('❌ Analysis cancelled early - state changed');
-          console.log('🔍 Debug: step', i, 'progress', step.progress, 'isAnalyzing', isAnalyzing, 'refCurrent', analysisRef.current);
+        // Exit early if analysis is cancelled (only check ref, not state)
+        if (!analysisRef.current) {
+          console.log('❌ Analysis cancelled early - ref changed');
+          console.log('🔍 Debug: step', i, 'progress', step.progress, 'refCurrent', analysisRef.current);
           return;
         }
       }

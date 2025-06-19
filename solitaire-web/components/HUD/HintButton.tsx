@@ -187,7 +187,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
               <div className="flex items-center space-x-2 border-b border-purple-500/20 pb-2">
                 <Brain className="h-4 w-4 text-purple-400" />
                 <span className="text-sm font-semibold text-purple-200">AI Hint</span>
-                {analysisData?.xrayEnabled && (
+                {persistentHintData.data?.xrayEnabled && (
                   <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
                     ENHANCED
                   </span>
@@ -195,85 +195,85 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
               </div>
 
               {/* Error handling */}
-              {errorMessage && (
+              {persistentHintData.error && (
                 <div className="text-sm text-red-300 bg-red-900/20 p-2 rounded">
-                  {errorMessage}
+                  {persistentHintData.error}
                 </div>
               )}
 
               {/* Main move recommendation */}
-              {analysisData?.move && (
+              {persistentHintData.data?.move && (
                 <div className="space-y-2">
                   <div className="text-sm font-medium text-yellow-300">
                     💡 Recommended Move:
                   </div>
                   <div className="text-sm text-white bg-gray-800/80 p-2 rounded border border-gray-600/30">
-                    {analysisData.move.description}
+                    {persistentHintData.data.move.description}
                   </div>
-                  {analysisData.move.visualHint?.message && (
+                  {persistentHintData.data.move.visualHint?.message && (
                     <div className="text-xs text-blue-300 flex items-center space-x-1">
                       <span>💫</span>
-                      <span>{analysisData.move.visualHint.message}</span>
+                      <span>{persistentHintData.data.move.visualHint.message}</span>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Strategic analysis */}
-              {analysisData?.analysis && (
+              {persistentHintData.data?.analysis && (
                 <div className="space-y-2 text-xs">
-                  {analysisData.analysis.winProbability !== 'Unknown' && (
+                  {persistentHintData.data.analysis.winProbability !== 'Unknown' && (
                     <div className="flex justify-between">
                       <span className="text-gray-400">Win Probability:</span>
                       <span className="text-green-300 font-medium">
-                        {analysisData.analysis.winProbability}
+                        {persistentHintData.data.analysis.winProbability}
                       </span>
                     </div>
                   )}
                   
-                  {analysisData.analysis.deadlockRisk !== 'none' && (
+                  {persistentHintData.data.analysis.deadlockRisk !== 'none' && (
                     <div className="flex justify-between">
                       <span className="text-gray-400">Deadlock Risk:</span>
                       <span className={`font-medium ${
-                        analysisData.analysis.deadlockRisk === 'high' ? 'text-red-400' :
-                        analysisData.analysis.deadlockRisk === 'medium' ? 'text-orange-400' :
+                        persistentHintData.data.analysis.deadlockRisk === 'high' ? 'text-red-400' :
+                        persistentHintData.data.analysis.deadlockRisk === 'medium' ? 'text-orange-400' :
                         'text-yellow-400'
                       }`}>
-                        {analysisData.analysis.deadlockRisk.toUpperCase()}
+                        {persistentHintData.data.analysis.deadlockRisk.toUpperCase()}
                       </span>
                     </div>
                   )}
 
-                  {analysisData.analysis.hiddenCards && analysisData.analysis.hiddenCards !== 'No hidden card data' && (
+                  {persistentHintData.data.analysis.hiddenCards && persistentHintData.data.analysis.hiddenCards !== 'No hidden card data' && (
                     <div className="text-xs text-purple-200 bg-purple-900/60 p-2 rounded border border-purple-600/40">
                       <div className="font-medium mb-1 text-purple-100">👁️ Hidden Cards Detected:</div>
-                      <div className="text-purple-100">{analysisData.analysis.hiddenCards}</div>
+                      <div className="text-purple-100">{persistentHintData.data.analysis.hiddenCards}</div>
                     </div>
                   )}
                 </div>
               )}
 
               {/* Priority indicator */}
-              {analysisData?.priority && (
+              {persistentHintData.data?.priority && (
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-gray-400">Priority:</span>
                   <span className={`font-medium px-2 py-0.5 rounded-full ${
-                    analysisData.priority === 'critical' ? 'bg-red-500/20 text-red-300' :
-                    analysisData.priority === 'high' ? 'bg-orange-500/20 text-orange-300' :
-                    analysisData.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
+                    persistentHintData.data.priority === 'critical' ? 'bg-red-500/20 text-red-300' :
+                    persistentHintData.data.priority === 'high' ? 'bg-orange-500/20 text-orange-300' :
+                    persistentHintData.data.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-300' :
                     'bg-gray-500/20 text-gray-300'
                   }`}>
-                    {analysisData.priority.toUpperCase()}
+                    {persistentHintData.data.priority.toUpperCase()}
                   </span>
                 </div>
               )}
 
               {/* Future sequence preview */}
-              {analysisData?.futureSequence && analysisData.futureSequence.length > 0 && (
+              {persistentHintData.data?.futureSequence && persistentHintData.data.futureSequence.length > 0 && (
                 <div className="text-xs">
                   <div className="text-gray-400 mb-1">🔮 Future Moves:</div>
                   <div className="text-gray-300 space-y-0.5">
-                    {analysisData.futureSequence.slice(0, 2).map((move: string, i: number) => (
+                    {persistentHintData.data.futureSequence.slice(0, 2).map((move: string, i: number) => (
                       <div key={i} className="text-blue-300">• {move}</div>
                     ))}
                   </div>
@@ -284,8 +284,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
             {/* Close button */}
             <button
               onClick={() => {
-                setShowAnalysis(false);
-                setForceShow(false);
+                setPersistentHintData(prev => ({ ...prev, isVisible: false }));
                 console.log('🚫 Manual close triggered');
               }}
               className="absolute top-2 right-2 text-gray-400 hover:text-white text-lg w-6 h-6 

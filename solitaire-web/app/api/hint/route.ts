@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the actual game state for OpenAI analysis
-    let state;
+    let state: any;
     try {
       state = JSON.parse(gameState);
     } catch (parseError) {
@@ -111,13 +111,51 @@ export async function POST(request: NextRequest) {
         console.log('Could not parse structured response, using text analysis');
       }
 
+      // Validate if a suggested move is actually possible
+      function validateMove(gameState: any, move: any): boolean {
+        if (!move || !move.cards || move.cards.length === 0) {
+          return false;
+        }
+        
+        const cardToMove = move.cards[0];
+        console.log('🔍 Validating move for card:', cardToMove);
+        
+        // Check if card is visible in waste pile
+        if (gameState.waste && gameState.waste.cards && gameState.waste.cards.length > 0) {
+          const topWasteCard = gameState.waste.cards[gameState.waste.cards.length - 1];
+          const wasteCardName = `${topWasteCard.rank}${topWasteCard.suit}`;
+          if (wasteCardName === cardToMove || cardToMove.includes(topWasteCard.rank)) {
+            console.log('✅ Card found in waste pile');
+            return true;
+          }
+        }
+        
+        // Check if card is visible at top of tableau piles
+        for (const [index, tableau] of Object.entries(gameState.tableaux || {})) {
+          const tableauPile = tableau as any;
+          if (tableauPile.cards && tableauPile.cards.length > 0) {
+            const topCard = tableauPile.cards[tableauPile.cards.length - 1];
+            if (topCard.faceUp) {
+              const tableauCardName = `${topCard.rank}${topCard.suit}`;
+              if (tableauCardName === cardToMove || cardToMove.includes(topCard.rank)) {
+                console.log('✅ Card found in tableau pile', index);
+                return true;
+              }
+            }
+          }
+        }
+        
+        console.log('❌ Card not found or not visible');
+        return false;
+      }
+
       // Helper function to extract move from text if structured parsing fails
       function extractMoveFromText(text: string) {
         // Simple pattern matching for common moves
         const foundationMatch = text.match(/move.*?([AKQ\d]+[♠♥♦♣︎]+).*?foundation/i);
         const tableauMatch = text.match(/move.*?([AKQ\d]+[♠♥♦♣︎]+).*?(column|tableau).*?(\d+)/i);
         
-        if (foundationMatch) {
+        if (foundationMatch && validateMove(gameState, { cards: [foundationMatch[1]] })) {
           return {
             from: "detected",
             to: "foundation", 
@@ -132,7 +170,7 @@ export async function POST(request: NextRequest) {
           };
         }
         
-        if (tableauMatch) {
+        if (tableauMatch && validateMove(gameState, { cards: [tableauMatch[1]] })) {
           return {
             from: "detected",
             to: `tableau-${tableauMatch[3]}`,

@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'o4-mini', // Using o4-mini model as requested
+          model: 'o4-mini',
           messages: [
             {
               role: 'system',
@@ -76,11 +76,10 @@ export async function POST(request: NextRequest) {
             },
             {
               role: 'user',
-              content: prompt
+              content: `Game: ${gameState.substring(0, 500)}... Give ONE move.`
             }
           ],
-          max_completion_tokens: 5000, // Fixed parameter name for o4-mini model
-          // temperature: removed - o4-mini only supports default (1)
+          max_completion_tokens: 100, // Much smaller for faster response
         }),
       });
 
@@ -317,29 +316,49 @@ export async function POST(request: NextRequest) {
         return null;
       }
 
-      // Build response with AI analysis
+      // Prioritize actual moves over AI confusion
+      const actualMoves = findActualMoves(state);
+      const bestMove = actualMoves.length > 0 ? actualMoves.sort((a, b) => {
+        const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 };
+        return (priorityOrder[b.priority] || 1) - (priorityOrder[a.priority] || 1);
+      })[0] : null;
+
+      const move = bestMove ? {
+        from: bestMove.from,
+        to: bestMove.to,
+        cards: bestMove.cards,
+        description: bestMove.description,
+        sequenceLength: 1,
+        visualHint: {
+          highlightCards: bestMove.cards.map((c: string) => c.toLowerCase()),
+          animationType: bestMove.priority === 'high' ? "glow" as const : "pulse" as const,
+          message: bestMove.description
+        }
+      } : null;
+
+      // Build simplified response
       const result = {
         analysis: {
-          gameState: "ai-analyzed",
-          hiddenCards: xrayData || "AI analysis complete",
-          deadlockRisk: parsedAnalysis?.deadlockRisk || "low" as const,
-          winProbability: parsedAnalysis?.winProbability || "Good",
-          criticalCards: parsedAnalysis?.criticalCards || []
+          gameState: "simplified",
+          hiddenCards: "Quick analysis",
+          deadlockRisk: "low" as const,
+          winProbability: actualMoves.length > 0 ? "Good" : "Limited",
+          criticalCards: []
         },
-        move: parsedAnalysis?.move || extractMoveFromText(aiAnalysis),
-        reasoning: parsedAnalysis?.reasoning || aiAnalysis.substring(0, 200) + "...",
-        priority: parsedAnalysis?.priority || "medium" as const,
-        alternatives: parsedAnalysis?.alternatives || [],
-        futureSequence: parsedAnalysis?.futureSequence || [],
+        move,
+        reasoning: bestMove ? bestMove.description : "Try drawing from stock or look for different moves.",
+        priority: bestMove?.priority || "medium" as const,
+        alternatives: [],
+        futureSequence: [],
         deadlockStatus: {
-          isDeadlocked: parsedAnalysis?.deadlockStatus?.isDeadlocked || false,
-          riskFactors: parsedAnalysis?.deadlockStatus?.riskFactors || [],
-          escapeRoutes: parsedAnalysis?.deadlockStatus?.escapeRoutes || []
+          isDeadlocked: false,
+          riskFactors: [],
+          escapeRoutes: []
         },
         hintsUsed: hintsUsed + 1,
         hintsRemaining: maxHints - (hintsUsed + 1),
         xrayEnabled: true,
-        message: "🤖 AI analysis complete!"
+        message: "⚡ Quick hint!"
       };
 
       return NextResponse.json(result);

@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ENHANCED_SOLITAIRE_SYSTEM_PROMPT } from '@/lib/ai-prompts';
 
-const GAME_SOLVER_PROMPT = `You are an expert Solitaire AI that can solve entire games. Analyze the complete game state and determine:
-
-1. Whether the game is winnable from the current position
-2. The optimal number of moves to complete the game
-3. The best sequence of moves to achieve victory
-4. Confidence level in your solution (0-100%)
-
-Consider ALL cards including face-down cards and stock pile. Use your complete knowledge to plan the optimal path to victory.
-
-Return your analysis in this JSON format:
+const GAME_SOLVER_PROMPT = `Analyze this Solitaire game quickly. Return JSON:
 {
   "isWinnable": boolean,
-  "optimalMoves": number,
-  "confidence": number (0-100),
-  "moveSequence": [
-    {
-      "move": "brief_move_id",
-      "description": "human readable move description", 
-      "evaluation": "why this move is optimal"
-    }
-  ],
-  "reasoning": "detailed explanation of your analysis",
-  "deadlockRisk": "assessment of potential blocking",
-  "keyFactors": ["critical factors affecting solvability"]
+  "optimalMoves": number (realistic estimate 15-35),
+  "confidence": number (0-100)
 }
 
-Be thorough in your analysis but focus on practical, actionable insights.`;
+Focus on: foundation progress, blocked cards, empty spaces.`;
 
 export async function POST(request: NextRequest) {
   console.log('🧠 AI Game Solver API called');
@@ -63,18 +44,12 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Create detailed prompt for AI solver
+    // Create simplified prompt for AI solver
     const solverPrompt = `${GAME_SOLVER_PROMPT}
 
-CURRENT GAME STATE TO SOLVE:
-${JSON.stringify(state, null, 2)}
-
-ANALYSIS PARAMETERS:
-- Maximum search depth: ${maxDepth} moves
-- Time limit: ${timeLimit}ms
-- Focus on complete game solution, not just next move
-
-Analyze this position thoroughly and provide your complete game solution.`;
+Foundation progress: ${Object.values(state.foundations).map((f: any) => f.cards.length).join(',')}
+Stock cards: ${state.stock.cards.length}
+Visible tableau: ${Object.values(state.tableaux).map((t: any) => t.cards.filter((c: any) => c.faceUp).length).join(',')}`;
 
     console.log('🤖 Making OpenAI API call for game solving...');
     
@@ -97,7 +72,7 @@ Analyze this position thoroughly and provide your complete game solution.`;
             content: solverPrompt
           }
         ],
-        max_completion_tokens: 8000, // Need more tokens for complete game analysis
+                 max_completion_tokens: 200, // Much smaller for faster response
       }),
     });
 
@@ -197,10 +172,11 @@ function performLocalGameAnalysis(state: any) {
   const hiddenCardPenalty = totalHiddenCards * 1.5;
   const stockCyclePenalty = stockCards > 15 ? 10 : 0;
   
-  // Estimate optimal moves
+  // Estimate optimal moves (much more realistic)
   const cardsRemaining = 52 - foundationTotal;
-  const moveEfficiency = Math.max(0.6, 1 - (totalHiddenCards / 28));
-  const estimatedMoves = Math.round(cardsRemaining / moveEfficiency + hiddenCardPenalty / 2);
+  const baseMovesNeeded = cardsRemaining * 0.5; // Each card typically needs ~0.5 moves
+  const hiddenCardMoves = totalHiddenCards * 0.3; // Hidden cards add complexity
+  const estimatedMoves = Math.max(8, Math.min(35, Math.round(baseMovesNeeded + hiddenCardMoves)));
   
   // Win probability calculation
   let winProbability = 85; // Base optimism

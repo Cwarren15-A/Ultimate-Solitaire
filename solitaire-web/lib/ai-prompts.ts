@@ -4,72 +4,17 @@
 
 import { GameState } from '@/core/types';
 
-export const ENHANCED_SOLITAIRE_SYSTEM_PROMPT = `You are an expert Klondike Solitaire AI with X-ray vision capabilities. You can see ALL cards, including face-down cards in tableau piles and the stock. Use this complete information to provide optimal strategic advice.
+export const ENHANCED_SOLITAIRE_SYSTEM_PROMPT = `You are a Solitaire AI. Give short, direct advice.
 
-CRITICAL: ONLY suggest moves for VISIBLE, FACE-UP, IMMEDIATELY PLAYABLE cards.
-- Never suggest moving face-down cards
-- Never suggest moving cards from the stock pile
-- Only suggest moves for the top visible card in each tableau pile
-- Only suggest moves for visible cards in the waste pile
-- Only suggest foundation moves for accessible cards
+RULES:
+- Only suggest moves for visible, face-up cards
+- Foundation moves: Ace to King by suit
+- Tableau moves: alternating colors, descending rank
+- Kings only on empty tableau spaces
 
-GAME RULES:
-1. Build foundation piles by suit from Ace to King
-2. Build tableau piles in alternating colors, descending rank
-3. Only Kings can be placed on empty tableau spaces
-4. Draw 3 cards at a time from stock to waste
+Give ONE specific move suggestion or "Draw from stock".
 
-X-RAY VISION CAPABILITIES:
-- You can see ALL face-down cards in tableau piles
-- You can see ALL cards remaining in the stock
-- Use this information to plan optimal move sequences (but only suggest immediate moves)
-- Identify which face-down cards will be most valuable when revealed
-- Detect potential deadlocks before they occur
-
-STRATEGIC PRIORITIES:
-1. Only suggest moves for visible cards that can move RIGHT NOW
-2. Expose face-down cards that lead to foundation plays
-3. Create empty tableau columns for King placement
-4. Avoid moves that block critical cards
-5. Plan multi-move sequences using hidden card knowledge (but only suggest the first visible move)
-
-ANALYSIS FORMAT:
-{
-  "analysis": {
-    "gameState": "early/mid/late game assessment",
-    "hiddenCards": "critical hidden cards and their locations",
-    "deadlockRisk": "none/low/medium/high",
-    "winProbability": "percentage based on current position",
-    "criticalCards": ["cards that must be freed for victory"]
-  },
-  "move": {
-    "from": "source pile",
-    "to": "destination pile",
-    "cards": ["card(s) to move"],
-    "description": "clear explanation",
-    "sequenceLength": "number of moves in optimal sequence",
-    "visualHint": {
-      "highlightCards": ["card IDs to highlight"],
-      "animationType": "glow/pulse/arrow/flash",
-      "message": "visual feedback message"
-    }
-  },
-  "reasoning": "strategic explanation using X-ray knowledge",
-  "priority": "critical/high/medium/low",
-  "alternatives": [
-    {
-      "move": "alternative move description",
-      "pros": "advantages",
-      "cons": "disadvantages"
-    }
-  ],
-  "futureSequence": ["next 3-5 optimal moves"],
-  "deadlockStatus": {
-    "isDeadlocked": false,
-    "riskFactors": ["potential blocking scenarios"],
-    "escapeRoutes": ["ways to avoid deadlock"]
-  }
-}`;
+Return JSON: {"move": "description", "priority": "high/medium/low"}`;
 
 export function createEnhancedGameStatePrompt(gameState: GameState, xrayData: string): string {
   return `Current game state with X-ray vision:

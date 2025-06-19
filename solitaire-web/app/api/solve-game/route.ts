@@ -13,9 +13,28 @@ Focus on: foundation progress, blocked cards, empty spaces.`;
 export async function POST(request: NextRequest) {
   console.log('🧠 AI Game Solver API called');
   
+  let body, gameState, state;
+  
+  // Parse request body first
   try {
-    const body = await request.json();
-    const { gameState, maxDepth = 50, timeLimit = 30000 } = body;
+    body = await request.json();
+    gameState = body.gameState;
+  } catch (parseError) {
+    console.error('❌ Failed to parse request body:', parseError);
+    return NextResponse.json({
+      error: 'Invalid request body',
+      isWinnable: false,
+      optimalMoves: 25,
+      confidence: 50,
+      timeToSolve: 0.1,
+      aiPowered: false,
+      fallback: true
+    }, { status: 200 });
+  }
+
+  const { maxDepth = 50, timeLimit = 30000 } = body;
+  
+  try {
     
     console.log('🎮 Solving game state:', { 
       gameStateLength: gameState?.length,
@@ -23,18 +42,7 @@ export async function POST(request: NextRequest) {
       timeLimit 
     });
 
-    // Get OpenAI API key
-    const openaiApiKey = process.env.OPENAI_API_KEY;
-    if (!openaiApiKey) {
-      console.error('❌ OpenAI API key not found');
-      return NextResponse.json({
-        error: 'AI solver unavailable',
-        fallback: true
-      }, { status: 500 });
-    }
-
     // Parse game state
-    let state;
     try {
       state = JSON.parse(gameState);
     } catch (parseError) {
@@ -42,6 +50,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         error: 'Invalid game state data'
       }, { status: 400 });
+    }
+
+    // Get OpenAI API key
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      console.error('❌ OpenAI API key not found');
+      // Fall back to local analysis immediately
+      const fallbackSolution = performLocalGameAnalysis(state);
+      return NextResponse.json({
+        ...fallbackSolution,
+        timeToSolve: 0.8,
+        aiPowered: false,
+        fallback: true,
+        error: 'OpenAI API key not found'
+      });
     }
 
     // Create simplified prompt for AI solver
@@ -127,23 +150,30 @@ Visible tableau: ${Object.values(state.tableaux).map((t: any) => t.cards.filter(
     
     // Always provide fallback analysis even if AI fails
     try {
-      const body = await request.json();
-      const state = JSON.parse(body.gameState);
-      const fallbackSolution = performLocalGameAnalysis(state);
-      
-      return NextResponse.json({
-        ...fallbackSolution,
-        timeToSolve: 0.8,
-        aiPowered: false,
-        fallback: true,
-        error: `AI solver unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`
-      });
+      if (state) {
+        const fallbackSolution = performLocalGameAnalysis(state);
+        return NextResponse.json({
+          ...fallbackSolution,
+          timeToSolve: 0.8,
+          aiPowered: false,
+          fallback: true,
+          error: `AI solver unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`
+        });
+      } else {
+        throw new Error('No game state available for fallback analysis');
+      }
     } catch (fallbackError) {
+      console.error('❌ Fallback analysis failed:', fallbackError);
       return NextResponse.json({
         error: 'Complete solver failure',
-        isWinnable: null,
-        optimalMoves: null
-      }, { status: 500 });
+        isWinnable: false,
+        optimalMoves: 25,
+        confidence: 50,
+        timeToSolve: 0.5,
+        aiPowered: false,
+        fallback: true,
+        message: 'Using basic estimates due to analysis failure'
+      }, { status: 200 }); // Return 200 instead of 500 to avoid frontend errors
     }
   }
 }
@@ -151,83 +181,108 @@ Visible tableau: ${Object.values(state.tableaux).map((t: any) => t.cards.filter(
 function performLocalGameAnalysis(state: any) {
   console.log('📊 Performing local game analysis...');
   
-  // Calculate game progress metrics
-  const foundationTotal = Object.values(state.foundations).reduce(
-    (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
-  );
-  
-  const tableauAnalysis = Object.values(state.tableaux).map((tableau: any) => {
-    const totalCards = tableau?.cards?.length || 0;
-    const faceUpCards = tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0;
-    const faceDownCards = totalCards - faceUpCards;
-    return { totalCards, faceUpCards, faceDownCards };
-  });
-  
-  const totalHiddenCards = tableauAnalysis.reduce((sum, t) => sum + t.faceDownCards, 0);
-  const stockCards = state.stock?.cards?.length || 0;
-  const wasteCards = state.waste?.cards?.length || 0;
-  
-  // Solvability heuristics
-  const progressRatio = foundationTotal / 52;
-  const hiddenCardPenalty = totalHiddenCards * 1.5;
-  const stockCyclePenalty = stockCards > 15 ? 10 : 0;
-  
-  // Estimate optimal moves (much more realistic)
-  const cardsRemaining = 52 - foundationTotal;
-  const baseMovesNeeded = cardsRemaining * 0.5; // Each card typically needs ~0.5 moves
-  const hiddenCardMoves = totalHiddenCards * 0.3; // Hidden cards add complexity
-  const estimatedMoves = Math.max(8, Math.min(35, Math.round(baseMovesNeeded + hiddenCardMoves)));
-  
-  // Win probability calculation
-  let winProbability = 85; // Base optimism
-  winProbability -= hiddenCardPenalty * 1.2; // Hidden cards reduce odds
-  winProbability -= stockCyclePenalty; // Large stock reduces odds
-  winProbability += progressRatio * 30; // Progress improves odds
-  winProbability = Math.max(5, Math.min(95, winProbability));
-  
-  // Identify key factors
-  const keyFactors = [];
-  if (totalHiddenCards > 15) keyFactors.push("Many cards still hidden");
-  if (stockCards > 18) keyFactors.push("Large stock pile remaining");
-  if (foundationTotal < 4) keyFactors.push("Early game - build foundations");
-  if (progressRatio > 0.5) keyFactors.push("Good progress - maintain momentum");
-  
-  // Generate strategic move sequence
-  const moveSequence = [
-    {
-      move: "foundation_priority",
-      description: "Build foundation piles whenever possible",
-      evaluation: `${foundationTotal}/52 cards placed - ${Math.round(progressRatio * 100)}% complete`
-    },
-    {
-      move: "expose_hidden",
-      description: "Reveal face-down tableau cards",
-      evaluation: `${totalHiddenCards} cards still hidden`
-    },
-    {
-      move: "king_management", 
-      description: "Create empty tableau spaces for Kings",
-      evaluation: "Essential for late-game flexibility"
-    },
-    {
-      move: "stock_cycling",
-      description: "Efficiently cycle through stock pile",
-      evaluation: `${stockCards} cards in stock`
-    }
-  ];
-  
-  return {
-    isWinnable: winProbability > 25,
-    estimatedMoves,
-    confidence: Math.round(winProbability),
-    moveSequence,
-    deadlockRisk: winProbability < 40 ? "high" : winProbability < 70 ? "medium" : "low",
-    keyFactors,
-    metrics: {
-      foundationTotal,
-      totalHiddenCards,
-      stockCards,
-      progressRatio: Math.round(progressRatio * 100)
-    }
-  };
+  try {
+    // Calculate game progress metrics
+    const foundationTotal = Object.values(state?.foundations || {}).reduce(
+      (sum: number, foundation: any) => sum + (foundation?.cards?.length || 0), 0
+    );
+    
+    const tableauAnalysis = Object.values(state?.tableaux || {}).map((tableau: any) => {
+      const totalCards = tableau?.cards?.length || 0;
+      const faceUpCards = tableau?.cards?.filter((c: any) => c.faceUp)?.length || 0;
+      const faceDownCards = totalCards - faceUpCards;
+      return { totalCards, faceUpCards, faceDownCards };
+    });
+    
+    const totalHiddenCards = tableauAnalysis.reduce((sum, t) => sum + t.faceDownCards, 0);
+    const stockCards = state?.stock?.cards?.length || 0;
+    const wasteCards = state?.waste?.cards?.length || 0;
+    
+    // Solvability heuristics
+    const progressRatio = foundationTotal / 52;
+    const hiddenCardPenalty = totalHiddenCards * 1.5;
+    const stockCyclePenalty = stockCards > 15 ? 10 : 0;
+    
+    // Estimate optimal moves (much more realistic)
+    const cardsRemaining = 52 - foundationTotal;
+    const baseMovesNeeded = cardsRemaining * 0.5; // Each card typically needs ~0.5 moves
+    const hiddenCardMoves = totalHiddenCards * 0.3; // Hidden cards add complexity
+    const estimatedMoves = Math.max(8, Math.min(35, Math.round(baseMovesNeeded + hiddenCardMoves)));
+    
+    // Win probability calculation
+    let winProbability = 85; // Base optimism
+    winProbability -= hiddenCardPenalty * 1.2; // Hidden cards reduce odds
+    winProbability -= stockCyclePenalty; // Large stock reduces odds
+    winProbability += progressRatio * 30; // Progress improves odds
+    winProbability = Math.max(5, Math.min(95, winProbability));
+    
+    // Identify key factors
+    const keyFactors = [];
+    if (totalHiddenCards > 15) keyFactors.push("Many cards still hidden");
+    if (stockCards > 18) keyFactors.push("Large stock pile remaining");
+    if (foundationTotal < 4) keyFactors.push("Early game - build foundations");
+    if (progressRatio > 0.5) keyFactors.push("Good progress - maintain momentum");
+    
+    // Generate strategic move sequence
+    const moveSequence = [
+      {
+        move: "foundation_priority",
+        description: "Build foundation piles whenever possible",
+        evaluation: `${foundationTotal}/52 cards placed - ${Math.round(progressRatio * 100)}% complete`
+      },
+      {
+        move: "expose_hidden",
+        description: "Reveal face-down tableau cards",
+        evaluation: `${totalHiddenCards} cards still hidden`
+      },
+      {
+        move: "king_management", 
+        description: "Create empty tableau spaces for Kings",
+        evaluation: "Essential for late-game flexibility"
+      },
+      {
+        move: "stock_cycling",
+        description: "Efficiently cycle through stock pile",
+        evaluation: `${stockCards} cards in stock`
+      }
+    ];
+    
+    return {
+      isWinnable: winProbability > 25,
+      estimatedMoves,
+      confidence: Math.round(winProbability),
+      moveSequence,
+      deadlockRisk: winProbability < 40 ? "high" : winProbability < 70 ? "medium" : "low",
+      keyFactors,
+      metrics: {
+        foundationTotal,
+        totalHiddenCards,
+        stockCards,
+        progressRatio: Math.round(progressRatio * 100)
+      }
+    };
+  } catch (analysisError) {
+    console.error('❌ Local analysis error:', analysisError);
+    // Return basic safe defaults
+    return {
+      isWinnable: true,
+      estimatedMoves: 25,
+      confidence: 60,
+      moveSequence: [
+        {
+          move: "basic_strategy",
+          description: "Look for foundation moves",
+          evaluation: "Basic fallback advice"
+        }
+      ],
+      deadlockRisk: "medium",
+      keyFactors: ["Analysis limited due to error"],
+      metrics: {
+        foundationTotal: 0,
+        totalHiddenCards: 20,
+        stockCards: 24,
+        progressRatio: 0
+      }
+    };
+  }
 } 

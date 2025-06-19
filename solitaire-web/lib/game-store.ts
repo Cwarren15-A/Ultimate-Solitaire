@@ -87,21 +87,59 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return true;
     }
     
-    if (!silent && result.error) {
-      console.error('Invalid move:', result.error);
-    }
+    // Silently ignore invalid moves in production
+    // if (!silent && result.error) {
+    //   console.error('Invalid move:', result.error);
+    // }
     
     return false;
   },
   
-  undo: () => {
-    // Implement undo logic
-    console.log('Undo not implemented yet');
+    undo: () => {
+    const { moveHistory, redoStack } = get();
+    if (moveHistory.length === 0) return;
+
+    const lastMove = moveHistory[moveHistory.length - 1];
+    const newMoveHistory = moveHistory.slice(0, -1);
+    const newRedoStack = [...redoStack, lastMove];
+
+    // For now, just recreate the game state by replaying all moves except the last one
+    const initialState = initGame({ drawMode: get().currentState.drawMode });
+    let replayState = initialState;
+
+    for (const move of newMoveHistory) {
+      const result = makeMoveCore(replayState, move);
+      if (result.success && result.state) {
+        replayState = result.state;
+      }
+    }
+
+    set({
+      currentState: replayState,
+      moveHistory: newMoveHistory,
+      redoStack: newRedoStack,
+      canUndo: newMoveHistory.length > 0,
+      canRedo: true,
+    });
   },
-  
+
   redo: () => {
-    // Implement redo logic
-    console.log('Redo not implemented yet');
+    const { redoStack } = get();
+    if (redoStack.length === 0) return;
+
+    const moveToRedo = redoStack[redoStack.length - 1];
+    const newRedoStack = redoStack.slice(0, -1);
+
+    const result = makeMoveCore(get().currentState, moveToRedo);
+    if (result.success && result.state) {
+      set((state) => ({
+        currentState: result.state!,
+        moveHistory: [...state.moveHistory, moveToRedo],
+        redoStack: newRedoStack,
+        canUndo: true,
+        canRedo: newRedoStack.length > 0,
+      }));
+    }
   },
   
   drawCards: () => {
@@ -143,8 +181,81 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   
   autoCompleteGame: () => {
-    // Implement auto-complete logic
-    console.log('Auto-complete not implemented yet');
+    // Simple auto-complete: try to move all face-up cards to foundations
+    let currentState = get().currentState;
+    let movesMade = 0;
+    let maxAttempts = 100; // Prevent infinite loops
+
+    while (maxAttempts > 0) {
+      let foundMove = false;
+      maxAttempts--;
+
+      // Check all tableau piles for cards that can move to foundations
+      for (let i = 1; i <= 7; i++) {
+        const tableauKey = i as 1 | 2 | 3 | 4 | 5 | 6 | 7;
+        const tableau = currentState.tableaux[tableauKey];
+        
+        if (tableau.cards.length > 0) {
+          const topCard = tableau.cards[tableau.cards.length - 1];
+          if (topCard.faceUp) {
+            // Try to move to appropriate foundation
+            const foundationId = `foundation-${
+              topCard.suit === "♠︎" ? "spades" :
+              topCard.suit === "♥︎" ? "hearts" :
+              topCard.suit === "♦︎" ? "diamonds" : "clubs"
+            }` as any;
+
+            const move = {
+              from: tableau.id as any,
+              to: foundationId,
+              cards: [topCard],
+              timestamp: Date.now()
+            };
+
+            const result = makeMoveCore(currentState, move);
+            if (result.success && result.state) {
+              currentState = result.state;
+              movesMade++;
+              foundMove = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Check waste pile
+      if (!foundMove && currentState.waste.cards.length > 0) {
+        const topCard = currentState.waste.cards[currentState.waste.cards.length - 1];
+        const foundationId = `foundation-${
+          topCard.suit === "♠︎" ? "spades" :
+          topCard.suit === "♥︎" ? "hearts" :
+          topCard.suit === "♦︎" ? "diamonds" : "clubs"
+        }` as any;
+
+        const move = {
+          from: "waste" as any,
+          to: foundationId,
+          cards: [topCard],
+          timestamp: Date.now()
+        };
+
+        const result = makeMoveCore(currentState, move);
+        if (result.success && result.state) {
+          currentState = result.state;
+          movesMade++;
+          foundMove = true;
+        }
+      }
+
+      if (!foundMove) break;
+    }
+
+    if (movesMade > 0) {
+      set({
+        currentState,
+        canUndo: true,
+      });
+    }
   },
   
   hydrate: () => {

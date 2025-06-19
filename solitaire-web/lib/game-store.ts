@@ -1,13 +1,14 @@
 import { create } from 'zustand';
 import { GameState, Move } from '@/core/types';
 import { initGame } from '@/core/dealing';
-import { makeMove as makeMoveCore } from '@/core';
+import { makeMove as makeMoveCore, drawFromStock } from '@/core';
 import { analytics } from './analytics';
 
 interface GameStore {
   currentState: GameState;
   moveHistory: Move[];
-  redoStack: Move[];
+  undoStack: GameState[];
+  redoStack: GameState[];
   hintsUsed: number;
   isHydrated: boolean;
   
@@ -30,6 +31,7 @@ interface GameStore {
 export const useGameStore = create<GameStore>((set, get) => ({
   currentState: initGame(),
   moveHistory: [],
+  undoStack: [],
   redoStack: [],
   hintsUsed: 0,
   isHydrated: false,
@@ -41,6 +43,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       currentState: newState,
       moveHistory: [],
+      undoStack: [],
       redoStack: [],
       hintsUsed: 0,
       canUndo: false,
@@ -55,6 +58,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       currentState: newState,
       moveHistory: [],
+      undoStack: [],
       redoStack: [],
       hintsUsed: 0,
       canUndo: false,
@@ -71,7 +75,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set((state) => ({
         currentState: result.state!,
         moveHistory: [...state.moveHistory, move],
-        redoStack: [],
+        undoStack: [...state.undoStack, currentState], // Save current state before move
+        redoStack: [], // Clear redo stack when new move is made
         canUndo: true,
         canRedo: false,
       }));
@@ -95,92 +100,49 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return false;
   },
   
-    undo: () => {
-    const { moveHistory, redoStack } = get();
-    if (moveHistory.length === 0) return;
+  undo: () => {
+    const { undoStack, currentState } = get();
+    if (undoStack.length === 0) return;
 
-    const lastMove = moveHistory[moveHistory.length - 1];
-    const newMoveHistory = moveHistory.slice(0, -1);
-    const newRedoStack = [...redoStack, lastMove];
-
-    // For now, just recreate the game state by replaying all moves except the last one
-    const initialState = initGame({ drawMode: get().currentState.drawMode });
-    let replayState = initialState;
-
-    for (const move of newMoveHistory) {
-      const result = makeMoveCore(replayState, move);
-      if (result.success && result.state) {
-        replayState = result.state;
-      }
-    }
+    const previousState = undoStack[undoStack.length - 1];
+    const newUndoStack = undoStack.slice(0, -1);
 
     set({
-      currentState: replayState,
-      moveHistory: newMoveHistory,
-      redoStack: newRedoStack,
-      canUndo: newMoveHistory.length > 0,
+      currentState: previousState,
+      undoStack: newUndoStack,
+      redoStack: [currentState, ...get().redoStack],
+      canUndo: newUndoStack.length > 0,
       canRedo: true,
     });
   },
 
   redo: () => {
-    const { redoStack } = get();
+    const { redoStack, currentState } = get();
     if (redoStack.length === 0) return;
 
-    const moveToRedo = redoStack[redoStack.length - 1];
-    const newRedoStack = redoStack.slice(0, -1);
+    const nextState = redoStack[0];
+    const newRedoStack = redoStack.slice(1);
 
-    const result = makeMoveCore(get().currentState, moveToRedo);
-    if (result.success && result.state) {
-      set((state) => ({
-        currentState: result.state!,
-        moveHistory: [...state.moveHistory, moveToRedo],
-        redoStack: newRedoStack,
-        canUndo: true,
-        canRedo: newRedoStack.length > 0,
-      }));
-    }
+    set({
+      currentState: nextState,
+      undoStack: [...get().undoStack, currentState],
+      redoStack: newRedoStack,
+      canUndo: true,
+      canRedo: newRedoStack.length > 0,
+    });
   },
   
   drawCards: () => {
     const { currentState } = get();
-    const stockCards = currentState.stock.cards;
-    if (stockCards.length > 0) {
-      const cardsToDraw = Math.min(currentState.drawMode, stockCards.length);
-      const drawnCards = stockCards.slice(0, cardsToDraw).map(card => ({ ...card, faceUp: true }));
-      
-      set((state) => ({
-        currentState: {
-          ...state.currentState,
-          stock: { 
-            ...state.currentState.stock, 
-            cards: stockCards.slice(cardsToDraw) 
-          },
-          waste: { 
-            ...state.currentState.waste, 
-            cards: [...drawnCards, ...state.currentState.waste.cards] 
-          },
-        },
-      }));
-    } else if (currentState.waste.cards.length > 0) {
-      // Reset stock from waste (flip waste pile back to stock)
-      const wasteCards = [...currentState.waste.cards]; // Create a copy
-      const newStockCards = wasteCards.reverse().map(card => ({ ...card, faceUp: false }));
-      
-      set((state) => ({
-        currentState: {
-          ...state.currentState,
-          stock: { 
-            ...state.currentState.stock, 
-            cards: newStockCards
-          },
-          waste: { 
-            ...state.currentState.waste, 
-            cards: [] 
-          },
-        },
-      }));
-    }
+    const newState = drawFromStock(currentState);
+    
+    set((state) => ({
+      currentState: newState,
+      undoStack: [...state.undoStack, currentState], // Save current state before drawing
+      redoStack: [], // Clear redo stack
+      canUndo: true,
+      canRedo: false,
+    }));
   },
   
   autoCompleteGame: () => {

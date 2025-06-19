@@ -20,6 +20,9 @@ export const metadata: Metadata = {
   keywords: ["solitaire", "klondike", "card game", "browser game"],
   authors: [{ name: "Ultimate Solitaire Team" }],
   viewport: "width=device-width, initial-scale=1",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

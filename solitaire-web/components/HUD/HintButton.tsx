@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useEnhancedHint, type EnhancedHintResponse } from "@/lib/useHint";
 import { useGameStore } from "@/lib/game-store";
@@ -138,9 +139,9 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
         )}
       </AnimatePresence>
 
-      {/* Enhanced Analysis Panel */}
+      {/* Enhanced Analysis Panel - Rendered via Portal */}
       <AnimatePresence>
-        {showAnalysis && (analysisData || errorMessage) && (
+        {showAnalysis && (analysisData || errorMessage) && typeof document !== 'undefined' && createPortal(
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -259,7 +260,8 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
             </button>
             
             {/* Removed arrow since we're using fixed positioning */}
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
     </div>

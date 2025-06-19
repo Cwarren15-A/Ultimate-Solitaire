@@ -9,7 +9,7 @@ import Pile from "./Pile";
 import Card from "./CardNew";
 import Timer from "./HUD/Timer";
 import MoveCounter from "./HUD/MoveCounter";
-import HintButton from "./HUD/HintButton";
+import SimpleHintDisplay from "./HUD/SimpleHintDisplay";
 import SettingsDrawer from "./HUD/SettingsDrawer";
 import QuickStats from "./HUD/QuickStats"; 
 import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
@@ -345,7 +345,7 @@ export default function GameBoard() {
           
           {/* Right side - Actions */}
           <div className="flex items-center space-x-3">
-            <HintButton />
+                            <SimpleHintDisplay />
             
             <button
               onClick={autoCompleteGame}

@@ -13,10 +13,17 @@ interface HintButtonProps {
 
 export default function HintButton({ maxHints = 5 }: HintButtonProps) {
   const [isHovered, setIsHovered] = useState(false);
-  const [showAnalysis, setShowAnalysis] = useState(false);
-  const [analysisData, setAnalysisData] = useState<EnhancedHintResponse | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [forceShow, setForceShow] = useState(false); // New persistent flag
+  const [persistentHintData, setPersistentHintData] = useState<{
+    data: EnhancedHintResponse | null;
+    error: string | null;
+    isVisible: boolean;
+    timestamp: number;
+  }>({
+    data: null,
+    error: null,
+    isVisible: false,
+    timestamp: 0
+  });
   
   const { currentState } = useGameStore();
   
@@ -34,29 +41,32 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
     moveHistory: [], // TODO: Add move history tracking
     onHintReceived: (hint) => {
       console.log('📈 onHintReceived called with:', hint);
-      setAnalysisData(hint);
-      setShowAnalysis(true);
-      setForceShow(true); // Force display override
-      console.log('🎯 Set showAnalysis to true, analysisData:', !!hint);
+      const timestamp = Date.now();
+      setPersistentHintData({
+        data: hint,
+        error: null,
+        isVisible: true,
+        timestamp
+      });
+      console.log('🎯 Set persistent hint data, visible:', true);
       
       // Auto-hide analysis after 10 seconds for enhanced content
       setTimeout(() => {
-        setShowAnalysis(false);
-        setForceShow(false);
+        setPersistentHintData(prev => ({ ...prev, isVisible: false }));
       }, 10000);
     },
     onVisualEffect: (effect) => {
       console.log('Visual effect triggered:', effect);
     },
     onError: (error) => {
-      setErrorMessage(error);
-      setAnalysisData(null);
-      setShowAnalysis(true);
-      setForceShow(true);
+      setPersistentHintData({
+        data: null,
+        error: error,
+        isVisible: true,
+        timestamp: Date.now()
+      });
       setTimeout(() => {
-        setShowAnalysis(false);
-        setForceShow(false);
-        setErrorMessage(null);
+        setPersistentHintData(prev => ({ ...prev, isVisible: false, error: null }));
       }, 6000);
     }
   });
@@ -129,7 +139,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
 
       {/* Enhanced Tooltip */}
       <AnimatePresence>
-        {isHovered && !showAnalysis && (
+        {isHovered && !persistentHintData.isVisible && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -153,8 +163,14 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
       {/* Enhanced Analysis Panel - Rendered via Portal */}
       <AnimatePresence>
         {(() => {
-          const shouldShow = (showAnalysis || forceShow) && (analysisData || errorMessage) && typeof document !== 'undefined';
-          console.log('🔍 Render check:', { showAnalysis, forceShow, hasAnalysisData: !!analysisData, hasErrorMessage: !!errorMessage, shouldShow });
+          const shouldShow = persistentHintData.isVisible && (persistentHintData.data || persistentHintData.error) && typeof document !== 'undefined';
+          console.log('🔍 Render check:', { 
+            isVisible: persistentHintData.isVisible, 
+            hasData: !!persistentHintData.data, 
+            hasError: !!persistentHintData.error, 
+            shouldShow,
+            timestamp: persistentHintData.timestamp
+          });
           return shouldShow;
         })() && createPortal(
           <motion.div

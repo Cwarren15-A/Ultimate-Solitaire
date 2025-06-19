@@ -48,13 +48,25 @@ export default function EnhancedHintDisplay({
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95, y: -20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95, y: -20 }}
-      className="fixed top-4 right-4 w-96 max-h-[80vh] bg-gray-900/98 border-2 border-purple-400/60 
-                 rounded-xl shadow-2xl backdrop-blur-md z-[100000] overflow-hidden"
-    >
+    <>
+      {/* Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/30 z-[999999]"
+        onClick={onClose}
+      />
+      
+      {/* Hint Panel */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: -20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: -20 }}
+        className="fixed top-4 right-4 w-96 max-h-[80vh] bg-gray-900/98 border-2 border-purple-400/60 
+                   rounded-xl shadow-2xl backdrop-blur-md z-[9999999] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
       {/* Header with tabs */}
       <div className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 p-4 border-b border-purple-500/30">
         <div className="flex items-center justify-between mb-3">
@@ -309,6 +321,7 @@ export default function EnhancedHintDisplay({
           <span className="text-purple-300">{hintData.message}</span>
         </div>
       </div>
-    </motion.div>
+      </motion.div>
+    </>
   );
 } 

@@ -195,12 +195,12 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
         <>
           {/* Backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-black/20 z-[9998] animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/30 z-[999998] animate-in fade-in duration-200"
             onClick={closeHint}
           />
           
           {/* Hint panel */}
-          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900/98 border border-purple-400 rounded-lg shadow-2xl z-[9999] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
+          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900/98 border border-purple-400 rounded-lg shadow-2xl z-[9999998] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Brain className="h-5 w-5 text-purple-400" />

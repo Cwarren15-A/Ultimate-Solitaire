@@ -17,7 +17,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse the actual game state for real analysis
-    const state = JSON.parse(gameState);
+    let state;
+    try {
+      state = JSON.parse(gameState);
+    } catch (parseError) {
+      console.error('Failed to parse game state:', parseError);
+      return NextResponse.json({
+        error: 'Invalid game state data',
+        message: 'Could not parse game state'
+      }, { status: 400 });
+    }
     
     // Real strategic analysis function
     function analyzeGameState(gameState: any, xrayData: string) {
@@ -96,39 +105,51 @@ export async function POST(request: NextRequest) {
     }
 
     // Helper functions for game analysis
-    function findFoundationMoves(state: any) {
-      const moves = [];
-      
-      // Check waste pile
-      if (state.waste.cards.length > 0) {
-        const topCard = state.waste.cards[state.waste.cards.length - 1];
-        const foundationPile = getFoundationForCard(topCard, state);
-        if (canPlaceOnFoundation(topCard, foundationPile)) {
-          moves.push({
-            from: "waste",
-            to: `foundation-${getSuitName(topCard.suit)}`,
-            card: `${topCard.rank}${topCard.suit}`,
-          });
-        }
-      }
+         function findFoundationMoves(state: any) {
+       const moves = [];
+       
+       try {
+         // Check waste pile
+         if (state?.waste?.cards && state.waste.cards.length > 0) {
+           const topCard = state.waste.cards[state.waste.cards.length - 1];
+           if (topCard && topCard.suit && typeof topCard.rank === 'number') {
+             const foundationPile = getFoundationForCard(topCard, state);
+             if (foundationPile && canPlaceOnFoundation(topCard, foundationPile)) {
+               moves.push({
+                 from: "waste",
+                 to: `foundation-${getSuitName(topCard.suit)}`,
+                 card: `${topCard.rank}${topCard.suit}`,
+               });
+             }
+           }
+         }
+       } catch (error) {
+         console.error('Error checking waste pile:', error);
+       }
 
-      // Check tableau piles
-      for (let i = 1; i <= 7; i++) {
-        const tableau = state.tableaux[i];
-        if (tableau.cards.length > 0) {
-          const topCard = tableau.cards[tableau.cards.length - 1];
-          if (topCard.faceUp) {
-            const foundationPile = getFoundationForCard(topCard, state);
-            if (canPlaceOnFoundation(topCard, foundationPile)) {
-              moves.push({
-                from: `tableau-${i}`,
-                to: `foundation-${getSuitName(topCard.suit)}`,
-                card: `${topCard.rank}${topCard.suit}`,
-              });
-            }
-          }
-        }
-      }
+             try {
+         // Check tableau piles
+         if (state?.tableaux) {
+           for (let i = 1; i <= 7; i++) {
+             const tableau = state.tableaux[i];
+             if (tableau && tableau.cards && tableau.cards.length > 0) {
+               const topCard = tableau.cards[tableau.cards.length - 1];
+               if (topCard && topCard.faceUp && topCard.suit && typeof topCard.rank === 'number') {
+                 const foundationPile = getFoundationForCard(topCard, state);
+                 if (foundationPile && canPlaceOnFoundation(topCard, foundationPile)) {
+                   moves.push({
+                     from: `tableau-${i}`,
+                     to: `foundation-${getSuitName(topCard.suit)}`,
+                     card: `${topCard.rank}${topCard.suit}`,
+                   });
+                 }
+               }
+             }
+           }
+         }
+       } catch (error) {
+         console.error('Error checking tableau piles:', error);
+       }
 
       return moves;
     }
@@ -289,32 +310,42 @@ export async function POST(request: NextRequest) {
               (!isRed(card.suit) && isRed(topCard.suit)));
     }
 
-    // Perform the analysis
-    const analysis = analyzeGameState(state, xrayData);
-    
-    const result = {
-      analysis: {
-        gameState: "active-analysis",
-        hiddenCards: xrayData || "X-ray vision scanning...",
-        deadlockRisk: "low" as const,
-        winProbability: "calculating...",
-        criticalCards: []
-      },
-      move: analysis?.move || null,
-      reasoning: analysis?.reasoning || "Continue exploring moves. Try drawing cards or moving face-up cards.",
-      priority: analysis?.priority || "medium" as const,
-      alternatives: [],
-      futureSequence: [],
-      deadlockStatus: {
-        isDeadlocked: false,
-        riskFactors: [],
-        escapeRoutes: []
-      },
-      hintsUsed: hintsUsed + 1,
-      hintsRemaining: maxHints - (hintsUsed + 1),
-      xrayEnabled: true,
-      message: analysis ? "🎯 Strategic analysis complete!" : "🤔 Analyzing position..."
-    };
+         // Perform the analysis with error handling
+     let analysis;
+     try {
+       analysis = analyzeGameState(state, xrayData);
+     } catch (analysisError) {
+       console.error('Analysis error:', analysisError);
+       analysis = null;
+     }
+     
+          const result = {
+       analysis: {
+         gameState: "active-analysis",
+         hiddenCards: xrayData || "X-ray vision scanning...",
+         deadlockRisk: "low" as const,
+         winProbability: "calculating...",
+         criticalCards: []
+       },
+       move: analysis?.move || null,
+       reasoning: analysis?.reasoning || "Continue exploring moves. Look for foundation plays, or try moving Kings to empty spaces.",
+       priority: analysis?.priority || "medium" as const,
+       alternatives: analysis ? [] : [{
+         move: "Try drawing from stock",
+         pros: "Reveals new cards to play",
+         cons: "May cycle through deck without progress"
+       }],
+               futureSequence: [],
+       deadlockStatus: {
+         isDeadlocked: false,
+         riskFactors: [],
+         escapeRoutes: ["Try different card combinations", "Look for hidden opportunities"]
+       },
+       hintsUsed: hintsUsed + 1,
+       hintsRemaining: maxHints - (hintsUsed + 1),
+       xrayEnabled: true,
+       message: analysis ? "🎯 Strategic analysis complete!" : "🤔 Keep exploring - look for Aces, Kings on empty spaces, or foundation builds!"
+     };
 
     return NextResponse.json(result);
 

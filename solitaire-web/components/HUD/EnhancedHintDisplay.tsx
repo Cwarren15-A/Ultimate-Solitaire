@@ -305,7 +305,7 @@ export default function EnhancedHintDisplay({
       {/* Footer */}
       <div className="bg-gray-800/50 px-4 py-3 border-t border-gray-600/30">
         <div className="flex items-center justify-between text-xs text-gray-400">
-          <span>Powered by OpenAI o4-mini</span>
+                          <span>Powered by GPT-4o mini</span>
           <span className="text-purple-300">{hintData.message}</span>
         </div>
       </div>

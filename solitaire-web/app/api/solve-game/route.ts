@@ -83,8 +83,8 @@ Visible tableau: ${Object.values(state.tableaux).map((t: any) => t.cards.filter(
         'Authorization': `Bearer ${openaiApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'o4-mini',
+              body: JSON.stringify({
+          model: 'gpt-4o-mini',
         messages: [
           {
             role: 'system',

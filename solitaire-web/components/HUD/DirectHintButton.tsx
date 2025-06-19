@@ -298,7 +298,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
             <div className="bg-gray-800/50 px-4 py-2 border-t border-gray-600/30">
               <div className="flex items-center justify-between text-xs text-gray-400">
                 <span>
-                  {enhancedMode ? '🧠 Enhanced Analysis' : '⚡ Quick Mode'} • OpenAI o4-mini
+                  {enhancedMode ? '🧠 Enhanced Analysis' : '⚡ Quick Mode'} • GPT-4o mini
                 </span>
                 {hintDisplay.data?.message && (
                   <span className="text-purple-300">{hintDisplay.data.message}</span>

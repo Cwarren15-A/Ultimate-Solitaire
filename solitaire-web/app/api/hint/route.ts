@@ -55,10 +55,10 @@ export async function POST(request: NextRequest) {
     // Create the prompt for OpenAI
     const prompt = createEnhancedGameStatePrompt(gameState, xrayData);
     
-    console.log('🤖 Making OpenAI API call to o4-mini...');
+    console.log('🤖 Making OpenAI API call to GPT-4o mini...');
     console.log('📝 Prompt length:', prompt.length);
     
-    // Call OpenAI o4-mini API
+    // Call OpenAI GPT-4o mini API
     try {
       console.log('🌐 Sending request to OpenAI...');
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'o4-mini',
+          model: 'gpt-4o-mini',
           messages: [
             {
               role: 'system',

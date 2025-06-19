@@ -32,8 +32,10 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
     maxHints,
     moveHistory: [], // TODO: Add move history tracking
     onHintReceived: (hint) => {
+      console.log('📈 onHintReceived called with:', hint);
       setAnalysisData(hint);
       setShowAnalysis(true);
+      console.log('🎯 Set showAnalysis to true, analysisData:', !!hint);
       
       // Auto-hide analysis after 8 seconds for enhanced content
       setTimeout(() => {
@@ -145,7 +147,10 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
 
       {/* Enhanced Analysis Panel - Rendered via Portal */}
       <AnimatePresence>
-        {showAnalysis && (analysisData || errorMessage) && typeof document !== 'undefined' && createPortal(
+        {(() => {
+          console.log('🔍 Render check:', { showAnalysis, hasAnalysisData: !!analysisData, hasErrorMessage: !!errorMessage, shouldShow: showAnalysis && (analysisData || errorMessage) });
+          return showAnalysis && (analysisData || errorMessage) && typeof document !== 'undefined';
+        })() && createPortal(
           <motion.div
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}

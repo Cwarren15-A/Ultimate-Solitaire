@@ -121,10 +121,13 @@ export function useEnhancedHint({
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log('❌ API error response:', errorData);
         throw new Error(errorData.error || 'Failed to get hint');
       }
 
-      return response.json();
+      const responseData = await response.json();
+      console.log('✅ API response data:', responseData);
+      return responseData;
     },
     enabled: false,
     retry: 1,
@@ -189,10 +192,13 @@ export function useEnhancedHint({
     }
 
     try {
+      console.log('🔄 Calling fetchHint...');
       const result = await fetchHint();
+      console.log('📊 fetchHint result:', result);
       
       if (result.data) {
         const hint = result.data;
+        console.log('🎯 Processing hint data:', hint);
         setHintsUsed(hint.hintsUsed);
         setLastHint(hint);
         
@@ -200,6 +206,7 @@ export function useEnhancedHint({
         analytics.hintRequested(hint.hintsUsed);
         
         // Call callback
+        console.log('📞 Calling onHintReceived callback...');
         onHintReceived?.(hint);
         
         // Trigger visual effects if move is available
@@ -211,8 +218,11 @@ export function useEnhancedHint({
             duration: hint.move.visualHint.animationType === 'pulse' ? 3000 : 2000
           };
           
+          console.log('🎨 Triggering visual effect:', effect);
           setTimeout(() => triggerVisualEffect(effect), 100);
         }
+      } else {
+        console.log('⚠️ No data in result:', result);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to get AI hint';

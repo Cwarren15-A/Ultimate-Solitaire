@@ -163,13 +163,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
         },
       }));
     } else if (currentState.waste.cards.length > 0) {
-      // Reset stock from waste
+      // Reset stock from waste (flip waste pile back to stock)
+      const wasteCards = [...currentState.waste.cards]; // Create a copy
+      const newStockCards = wasteCards.reverse().map(card => ({ ...card, faceUp: false }));
+      
       set((state) => ({
         currentState: {
           ...state.currentState,
           stock: { 
             ...state.currentState.stock, 
-            cards: state.currentState.waste.cards.reverse().map(card => ({ ...card, faceUp: false }))
+            cards: newStockCards
           },
           waste: { 
             ...state.currentState.waste, 

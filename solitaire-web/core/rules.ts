@@ -165,7 +165,7 @@ export const drawFromStock = (gameState: GameState): GameState => {
   
   if (newState.stock.cards.length === 0) {
     // Recycle waste back to stock
-    newState.stock.cards = [...newState.waste.cards].reverse().map(card => 
+    newState.stock.cards = newState.waste.cards.map(card => 
       flipCard(card, false)
     );
     newState.waste.cards = [];

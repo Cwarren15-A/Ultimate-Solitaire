@@ -192,7 +192,15 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
       {/* Hint Panel */}
       {showHint && hintData && (
-        <div className="fixed top-4 right-4 w-96 max-w-[90vw] bg-gray-900/95 border border-purple-400 rounded-lg shadow-2xl z-50 p-4 backdrop-blur-sm">
+        <>
+          {/* Backdrop overlay */}
+          <div 
+            className="fixed inset-0 bg-black/20 z-[9998] animate-in fade-in duration-200"
+            onClick={closeHint}
+          />
+          
+          {/* Hint panel */}
+          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900/98 border border-purple-400 rounded-lg shadow-2xl z-[9999] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Brain className="h-5 w-5 text-purple-400" />
@@ -272,9 +280,9 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
           {/* Debug Info (only in development) */}
           {debugMode && hintData.debug && (
-            <div className="mt-4 bg-gray-800/50 p-3 rounded">
-              <div className="text-xs text-gray-400 mb-2">Debug Info</div>
-              <pre className="text-xs text-gray-300 overflow-auto max-h-20">
+            <div className="mt-4 bg-gray-800/50 p-3 rounded border border-gray-600/30">
+              <div className="text-xs text-gray-400 mb-2 font-medium">Debug Info</div>
+              <pre className="text-xs text-gray-300 overflow-auto max-h-20 font-mono leading-tight">
                 {JSON.stringify(hintData.debug, null, 2)}
               </pre>
             </div>
@@ -295,6 +303,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
             </div>
           </div>
         </div>
+        </>
       )}
     </div>
   );

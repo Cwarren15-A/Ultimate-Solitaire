@@ -427,7 +427,7 @@ export default function AiGameSolver() {
 
       {/* Debug info overlay */}
       {debugMode && solution && (
-        <div className="fixed top-20 right-4 w-80 bg-gray-900/95 border border-gray-600 rounded p-3 text-xs z-50">
+        <div className="fixed top-20 right-4 w-80 bg-gray-900/95 border border-gray-600 rounded p-3 text-xs z-[9999]">
           <div className="text-gray-300">
             <div>AI Powered: {solution.aiPowered ? 'Yes' : 'No'}</div>
             <div>Fallback: {solution.fallback ? 'Yes' : 'No'}</div>

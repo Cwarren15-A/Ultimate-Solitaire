@@ -1,0 +1,6 @@
+{
+  "framework": "nextjs",
+  "installCommand": "cd solitaire-web && npm install",
+  "buildCommand": "cd solitaire-web && npm run build",
+  "outputDirectory": "solitaire-web/.next"
+} 

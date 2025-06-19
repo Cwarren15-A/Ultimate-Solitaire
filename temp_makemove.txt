@@ -1,0 +1,30 @@
+makeMove: (move: Move, silent: boolean = false) => {
+  const { currentState } = get();
+  
+  try {
+    const newState = makeMoveCore(move, currentState);
+    
+    set((state) => ({
+      currentState: newState,
+      moveHistory: [...state.moveHistory, move],
+      redoStack: [],
+      canUndo: true,
+      canRedo: false,
+    }));
+    
+    if (!silent) {
+      analytics.moveMade(move);
+    }
+    
+    if (newState.isComplete) {
+      analytics.gameWon(get().moveHistory.length);
+    }
+    
+    return true;
+  } catch (error) {
+    if (!silent) {
+      console.error('Invalid move:', error instanceof Error ? error.message : error);
+    }
+    return false;
+  }
+}, 

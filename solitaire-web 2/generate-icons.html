@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Icon Generator</title>
+</head>
+<body>
+  <canvas id="canvas" width="512" height="512"></canvas>
+  
+  <script>
+    function generateIcon(size, filename) {
+      const canvas = document.getElementById('canvas');
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas size
+      canvas.width = size;
+      canvas.height = size;
+      
+      // Create gradient background
+      const gradient = ctx.createLinearGradient(0, 0, size, size);
+      gradient.addColorStop(0, '#059669'); // emerald-600
+      gradient.addColorStop(1, '#047857'); // emerald-700
+      
+      // Fill background
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+      
+      // Add card symbols
+      ctx.fillStyle = 'white';
+      ctx.font = `${size * 0.3}px serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Draw spade and heart symbols
+      ctx.fillText('♠', size * 0.3, size * 0.4);
+      ctx.fillStyle = '#ef4444'; // red-500
+      ctx.fillText('♥', size * 0.7, size * 0.4);
+      ctx.fillStyle = 'white';
+      ctx.fillText('♣', size * 0.3, size * 0.6);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillText('♦', size * 0.7, size * 0.6);
+      
+      // Download the image
+      const link = document.createElement('a');
+      link.download = filename;
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+    
+    // Generate all required icons
+    setTimeout(() => {
+      generateIcon(192, 'icon-192x192.png');
+      setTimeout(() => generateIcon(256, 'icon-256x256.png'), 100);
+      setTimeout(() => generateIcon(384, 'icon-384x384.png'), 200);
+      setTimeout(() => generateIcon(512, 'icon-512x512.png'), 300);
+      setTimeout(() => generateIcon(180, 'apple-touch-icon.png'), 400);
+      setTimeout(() => generateIcon(32, 'favicon-32x32.png'), 500);
+      setTimeout(() => generateIcon(16, 'favicon-16x16.png'), 600);
+    }, 100);
+  </script>
+</body>
+</html>

@@ -172,9 +172,9 @@ export const drawFromStock = (gameState: GameState): GameState => {
   } else {
     // Draw cards based on draw mode
     const cardsToDraw = Math.min(newState.drawMode, newState.stock.cards.length);
-    const drawnCards = newState.stock.cards.slice(-cardsToDraw);
+    const drawnCards = newState.stock.cards.slice(0, cardsToDraw); // Take from beginning (top of stock)
     
-    newState.stock.cards = newState.stock.cards.slice(0, -cardsToDraw);
+    newState.stock.cards = newState.stock.cards.slice(cardsToDraw); // Remove from beginning
     newState.waste.cards.push(...drawnCards.map(card => flipCard(card, true)));
   }
   

@@ -56,13 +56,17 @@ export default function AiGameSolver() {
   }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, isAnalyzing]);
 
   const solveGame = async () => {
-    if (isAnalyzing) return;
+    if (isAnalyzing) {
+      console.log('⚠️ Analysis already in progress, skipping...');
+      return;
+    }
     
+    console.log('🤖 AI Game Solver: Starting analysis...');
     setIsAnalyzing(true);
     setAnalysisProgress(0);
     setLastAnalysisTime(Date.now());
     
-    console.log('🤖 AI Game Solver: Starting analysis...');
+    console.log('✅ Analysis state initialized');
     
     try {
       // Simulate progressive analysis
@@ -76,23 +80,46 @@ export default function AiGameSolver() {
 
       for (let i = 0; i < progressSteps.length; i++) {
         const step = progressSteps[i];
+        console.log('📊 Progress step:', step.status, `${step.progress}%`);
         await new Promise(resolve => setTimeout(resolve, 600));
         setAnalysisProgress(step.progress);
         
         // Exit early if analysis is cancelled
-        if (!isAnalyzing) return;
+        if (!isAnalyzing) {
+          console.log('❌ Analysis cancelled early');
+          return;
+        }
       }
 
       console.log('📤 Calling solve-game API...');
+      console.log('🎮 Current state check:', { 
+        isComplete: currentState?.isComplete, 
+        moves: currentState?.moves,
+        hasFoundations: !!currentState?.foundations 
+      });
+      
+      const requestBody = {
+        gameState: serializeGameState(currentState),
+        maxDepth: 30, // Reduced for faster analysis
+        timeLimit: 15000 // 15 second limit
+      };
+      
+      console.log('📦 Request body prepared:', {
+        gameStateLength: requestBody.gameState.length,
+        maxDepth: requestBody.maxDepth,
+        timeLimit: requestBody.timeLimit
+      });
       
       const response = await fetch('/api/solve-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          gameState: serializeGameState(currentState),
-          maxDepth: 30, // Reduced for faster analysis
-          timeLimit: 15000 // 15 second limit
-        }),
+        body: JSON.stringify(requestBody),
+      });
+      
+      console.log('📥 API Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok
       });
 
       if (!response.ok) {
@@ -105,6 +132,11 @@ export default function AiGameSolver() {
       setSolution(solutionData);
     } catch (error) {
       console.error('❌ Game solver failed:', error);
+      console.error('❌ Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        type: typeof error
+      });
       
       // Enhanced fallback analysis
       const fallbackSolution = performEnhancedLocalAnalysis();
@@ -115,6 +147,7 @@ export default function AiGameSolver() {
         fallback: true
       });
     } finally {
+      console.log('🔄 Cleaning up analysis state...');
       setIsAnalyzing(false);
       setAnalysisProgress(0);
     }

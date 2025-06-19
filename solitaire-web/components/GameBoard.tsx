@@ -4,7 +4,6 @@ import { useGameStore } from "../lib/game-store";
 import { Card as CardType, PileId, Move } from "../core";
 import { canPlaceOnFoundation, getMovableTableauCards } from "../core/rules";
 import { useState, useCallback, useEffect } from "react";
-import { motion } from "framer-motion";
 import Pile from "./Pile";
 import Card from "./CardNew";
 import Timer from "./HUD/Timer";
@@ -12,7 +11,9 @@ import MoveCounter from "./HUD/MoveCounter";
 import DirectHintButton from "./HUD/DirectHintButton";
 import SettingsDrawer from "./HUD/SettingsDrawer";
 import QuickStats from "./HUD/QuickStats"; 
-import { DndContext, DragEndEvent, DragStartEvent, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import * as DndKit from "@dnd-kit/core";
+import type { DragEndEvent, DragStartEvent } from "@dnd-kit/core";
+const { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } = DndKit;
 
 export default function GameBoard() {
   const { 
@@ -113,7 +114,7 @@ export default function GameBoard() {
     if (pileId.startsWith('tableau-')) {
       const tableauIndex = parseInt(pileId.split('-')[1]) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
       const tableauCards = currentState.tableaux[tableauIndex].cards;
-      const cardIndex = tableauCards.findIndex(c => c.id === card.id);
+      const cardIndex = tableauCards.findIndex((c: CardType) => c.id === card.id);
       
       if (cardIndex !== -1) {
         // Get all cards from this position to the end that form a valid sequence
@@ -152,7 +153,7 @@ export default function GameBoard() {
       if (pileId.startsWith('tableau-')) {
         const sourceIndex = parseInt(pileId.split('-')[1]) as 1 | 2 | 3 | 4 | 5 | 6 | 7;
         const sourceTableau = currentState.tableaux[sourceIndex];
-        const cardIndex = sourceTableau.cards.findIndex(c => c.id === card.id);
+        const cardIndex = sourceTableau.cards.findIndex((c: CardType) => c.id === card.id);
         
         if (cardIndex > 0 && !sourceTableau.cards[cardIndex - 1].faceUp) {
           priority += 5;
@@ -392,16 +393,12 @@ export default function GameBoard() {
         
         {/* Game Won Banner */}
         {gameWon && (
-          <motion.div
-            initial={{ opacity: 0, y: -50 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white p-4 rounded-lg shadow-lg text-center"
-          >
+          <div className="mb-6 bg-gradient-to-r from-yellow-400 to-yellow-500 text-white p-4 rounded-lg shadow-lg text-center animate-fade-in">
             <h2 className="text-xl font-bold">🎉 Congratulations! You won! 🎉</h2>
             <p className="text-sm mt-1">
               Completed in {currentState.moves} moves
             </p>
-          </motion.div>
+          </div>
         )}
         
         {/* Game Board */}

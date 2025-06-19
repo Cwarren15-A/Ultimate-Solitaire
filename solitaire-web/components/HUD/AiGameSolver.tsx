@@ -22,18 +22,40 @@ export default function AiGameSolver() {
   const [solution, setSolution] = useState<GameSolution | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [lastAnalyzedGameId, setLastAnalyzedGameId] = useState<string>('');
+  const [lastAnalysisTime, setLastAnalysisTime] = useState<number>(0);
+  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false); // Default to OFF to save tokens
   const { currentState } = useGameStore();
 
   useEffect(() => {
-    // Auto-solve when game changes (but debounce to avoid too many calls)
-    const timer = setTimeout(() => {
-      if (!currentState.isComplete && !isAnalyzing) {
-        solveGame();
-      }
-    }, 2000);
+    // Create a meaningful game state hash to avoid re-analyzing identical positions
+    const gameStateHash = `${currentState.moves}-${Object.values(currentState.foundations).map(f => f.cards.length).join(',')}-${currentState.stock.cards.length}`;
+    const now = Date.now();
+    const timeSinceLastAnalysis = now - lastAnalysisTime;
+    const minCooldownTime = 5000; // 5 second minimum between analyses
 
-    return () => clearTimeout(timer);
-  }, [currentState, isAnalyzing]);
+    // Only analyze if:
+    // 1. Auto-analysis is enabled (to save tokens)
+    // 2. Game is not complete
+    // 3. Not currently analyzing
+    // 4. Game state has meaningfully changed (different hash)
+    // 5. Enough time has passed since last analysis (cooldown)
+    if (autoAnalyzeEnabled &&
+        !currentState.isComplete && 
+        !isAnalyzing && 
+        gameStateHash !== lastAnalyzedGameId &&
+        timeSinceLastAnalysis > minCooldownTime) {
+      
+      console.log('🔄 Game state changed meaningfully, scheduling analysis...');
+      const timer = setTimeout(() => {
+        setLastAnalyzedGameId(gameStateHash);
+        setLastAnalysisTime(now);
+        solveGame();
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentState.moves, currentState.isComplete]); // Only depend on move count and completion status
 
   const solveGame = async () => {
     setIsAnalyzing(true);
@@ -195,7 +217,7 @@ export default function AiGameSolver() {
             <span className="text-xs text-gray-300">{solution.timeToSolve.toFixed(1)}s</span>
           </div>
 
-          {/* Re-analyze Button */}
+          {/* Manual Analyze Button */}
           <motion.button
             onClick={solveGame}
             whileHover={{ scale: 1.05 }}
@@ -204,21 +226,55 @@ export default function AiGameSolver() {
                        text-purple-200 rounded text-xs border border-purple-500/30 transition-colors"
           >
             <Brain className="h-3 w-3" />
-            <span>Re-analyze</span>
+            <span>Analyze</span>
+          </motion.button>
+
+          {/* Auto-Analyze Toggle */}
+          <motion.button
+            onClick={() => setAutoAnalyzeEnabled(!autoAnalyzeEnabled)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`flex items-center space-x-1 px-2 py-1 rounded text-xs border transition-colors ${
+              autoAnalyzeEnabled 
+                ? 'bg-green-600/30 hover:bg-green-500/30 text-green-200 border-green-500/30'
+                : 'bg-gray-600/30 hover:bg-gray-500/30 text-gray-300 border-gray-500/30'
+            }`}
+            title={autoAnalyzeEnabled ? 'Auto-analyze ON (uses tokens)' : 'Auto-analyze OFF (saves tokens)'}
+          >
+            <div className={`w-2 h-2 rounded-full ${autoAnalyzeEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+            <span>Auto</span>
           </motion.button>
         </div>
       ) : (
-        <motion.button
-          onClick={solveGame}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-purple-600/30 to-blue-600/30 
-                     hover:from-purple-500/30 hover:to-blue-500/30 text-purple-200 rounded-lg 
-                     border border-purple-500/30 transition-colors text-sm"
-        >
-          <Brain className="h-4 w-4" />
-          <span>AI Solve Game</span>
-        </motion.button>
+        <div className="flex items-center space-x-2">
+          <motion.button
+            onClick={solveGame}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-purple-600/30 to-blue-600/30 
+                       hover:from-purple-500/30 hover:to-blue-500/30 text-purple-200 rounded-lg 
+                       border border-purple-500/30 transition-colors text-sm"
+          >
+            <Brain className="h-4 w-4" />
+            <span>Analyze Game</span>
+          </motion.button>
+
+          {/* Auto-Analyze Toggle */}
+          <motion.button
+            onClick={() => setAutoAnalyzeEnabled(!autoAnalyzeEnabled)}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className={`flex items-center space-x-1 px-2 py-2 rounded text-xs border transition-colors ${
+              autoAnalyzeEnabled 
+                ? 'bg-green-600/30 hover:bg-green-500/30 text-green-200 border-green-500/30'
+                : 'bg-gray-600/30 hover:bg-gray-500/30 text-gray-300 border-gray-500/30'
+            }`}
+            title={autoAnalyzeEnabled ? 'Auto-analyze ON (uses tokens)' : 'Auto-analyze OFF (saves tokens)'}
+          >
+            <div className={`w-2 h-2 rounded-full ${autoAnalyzeEnabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+            <span>Auto</span>
+          </motion.button>
+        </div>
       )}
     </motion.div>
   );

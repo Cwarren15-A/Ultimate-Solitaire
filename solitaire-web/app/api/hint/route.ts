@@ -149,9 +149,138 @@ export async function POST(request: NextRequest) {
         return false;
       }
 
+      // Find actual available moves in the game state
+      function findActualMoves(gameState: any) {
+        const availableMoves = [];
+        
+        // Check waste pile to foundation moves
+        if (gameState.waste && gameState.waste.cards && gameState.waste.cards.length > 0) {
+          const topWasteCard = gameState.waste.cards[gameState.waste.cards.length - 1];
+          const wasteCardName = `${topWasteCard.rank}${topWasteCard.suit}`;
+          
+          // Check if waste card can go to foundation
+          const suitFoundation = gameState.foundations[topWasteCard.suit.toLowerCase()];
+          if (canPlaceOnFoundation(topWasteCard, suitFoundation)) {
+            availableMoves.push({
+              from: "waste",
+              to: "foundation",
+              cards: [wasteCardName],
+              description: `Move ${wasteCardName} from waste to foundation`,
+              priority: "high"
+            });
+          }
+        }
+        
+        // Check tableau top cards to foundation moves
+        Object.entries(gameState.tableaux).forEach(([index, tableau]: [string, any]) => {
+          if (tableau.cards && tableau.cards.length > 0) {
+            const topCard = tableau.cards[tableau.cards.length - 1];
+            if (topCard.faceUp) {
+              const cardName = `${topCard.rank}${topCard.suit}`;
+              const suitFoundation = gameState.foundations[topCard.suit.toLowerCase()];
+              
+              if (canPlaceOnFoundation(topCard, suitFoundation)) {
+                availableMoves.push({
+                  from: `tableau-${index}`,
+                  to: "foundation",
+                  cards: [cardName],
+                  description: `Move ${cardName} from column ${parseInt(index) + 1} to foundation`,
+                  priority: "high"
+                });
+              }
+            }
+          }
+        });
+        
+        // Check waste to tableau moves
+        if (gameState.waste && gameState.waste.cards && gameState.waste.cards.length > 0) {
+          const topWasteCard = gameState.waste.cards[gameState.waste.cards.length - 1];
+          const wasteCardName = `${topWasteCard.rank}${topWasteCard.suit}`;
+          
+          Object.entries(gameState.tableaux).forEach(([index, tableau]: [string, any]) => {
+            if (canPlaceOnTableau(topWasteCard, tableau)) {
+              availableMoves.push({
+                from: "waste",
+                to: `tableau-${index}`,
+                cards: [wasteCardName],
+                description: `Move ${wasteCardName} from waste to column ${parseInt(index) + 1}`,
+                priority: "medium"
+              });
+            }
+          });
+        }
+        
+        // If no moves found, suggest drawing from stock
+        if (availableMoves.length === 0 && gameState.stock && gameState.stock.cards.length > 0) {
+          availableMoves.push({
+            from: "stock",
+            to: "waste",
+            cards: ["draw"],
+            description: "Draw cards from stock pile",
+            priority: "low"
+          });
+        }
+        
+        console.log('🎯 Found available moves:', availableMoves);
+        return availableMoves;
+      }
+      
+      function canPlaceOnFoundation(card: any, foundation: any) {
+        if (!foundation || !foundation.cards) return false;
+        
+        // Aces can go on empty foundations
+        if (foundation.cards.length === 0) {
+          return card.rank === 1; // Ace
+        }
+        
+        // Other cards must follow suit and be next in sequence
+        const topFoundationCard = foundation.cards[foundation.cards.length - 1];
+        return topFoundationCard.suit === card.suit && 
+               topFoundationCard.rank === card.rank - 1;
+      }
+      
+      function canPlaceOnTableau(card: any, tableau: any) {
+        if (!tableau || !tableau.cards) return true; // Can place King on empty tableau
+        
+        if (tableau.cards.length === 0) {
+          return card.rank === 13; // Only Kings on empty tableaux
+        }
+        
+        const topTableauCard = tableau.cards[tableau.cards.length - 1];
+        if (!topTableauCard.faceUp) return false;
+        
+        // Must be opposite color and one rank lower
+        const cardColor = (card.suit === '♠︎' || card.suit === '♣︎') ? 'black' : 'red';
+        const tableauColor = (topTableauCard.suit === '♠︎' || topTableauCard.suit === '♣︎') ? 'black' : 'red';
+        
+        return cardColor !== tableauColor && topTableauCard.rank === card.rank + 1;
+      }
+
       // Helper function to extract move from text if structured parsing fails
       function extractMoveFromText(text: string) {
-        // Simple pattern matching for common moves
+        // First try to find actual available moves
+        const actualMoves = findActualMoves(state);
+        if (actualMoves.length > 0) {
+          const bestMove = actualMoves.sort((a, b) => {
+            const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 };
+            return (priorityOrder[b.priority] || 1) - (priorityOrder[a.priority] || 1);
+          })[0];
+          
+          return {
+            from: bestMove.from,
+            to: bestMove.to,
+            cards: bestMove.cards,
+            description: bestMove.description,
+            sequenceLength: 1,
+            visualHint: {
+              highlightCards: bestMove.cards.map(c => c.toLowerCase()),
+              animationType: bestMove.priority === 'high' ? "glow" as const : "pulse" as const,
+              message: `AI found: ${bestMove.description}`
+            }
+          };
+        }
+        
+        // Fallback to text parsing
         const foundationMatch = text.match(/move.*?([AKQ\d]+[♠♥♦♣︎]+).*?foundation/i);
         const tableauMatch = text.match(/move.*?([AKQ\d]+[♠♥♦♣︎]+).*?(column|tableau).*?(\d+)/i);
         

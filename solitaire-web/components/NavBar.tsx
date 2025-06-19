@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { Trophy, Settings, RotateCcw, HelpCircle } from 'lucide-react';
 import { useGameStore } from '@/lib/game-store';
+import AiGameSolver from './HUD/AiGameSolver';
 
 export function NavBar() {
   const { startNewGame } = useGameStore();
@@ -22,6 +23,11 @@ export function NavBar() {
           <Trophy className="h-8 w-8 text-yellow-400" />
           <h1 className="text-xl font-bold text-white">Ultimate Solitaire</h1>
         </motion.div>
+
+        {/* AI Game Solver - Center Feature */}
+        <div className="flex-1 flex justify-center">
+          <AiGameSolver />
+        </div>
 
         {/* Game Controls */}
         <div className="flex items-center space-x-2">

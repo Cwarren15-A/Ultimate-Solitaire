@@ -146,7 +146,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { currentState } = get();
     const stockCards = currentState.stock.cards;
     if (stockCards.length > 0) {
-      const cardsToDraw = Math.min(3, stockCards.length);
+      const cardsToDraw = Math.min(currentState.drawMode, stockCards.length);
       const drawnCards = stockCards.slice(0, cardsToDraw).map(card => ({ ...card, faceUp: true }));
       
       set((state) => ({

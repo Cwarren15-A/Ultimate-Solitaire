@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { ENHANCED_SOLITAIRE_SYSTEM_PROMPT, createEnhancedGameStatePrompt, HINT_RATE_LIMIT_MESSAGE } from '@/lib/ai-prompts';
 
 export async function POST(request: NextRequest) {
+  console.log('🚀 Hint API endpoint called!');
+  
   try {
     const body = await request.json();
     const { gameState, xrayData, moveHistory, hintsUsed, maxHints, enhanced } = body;
+    
+    console.log('📦 Request body received:', { 
+      gameStateLength: gameState?.length, 
+      hintsUsed, 
+      maxHints 
+    });
 
     // Rate limiting check
     if (hintsUsed >= maxHints) {
@@ -18,8 +26,14 @@ export async function POST(request: NextRequest) {
 
     // Get OpenAI API key
     const openaiApiKey = process.env.OPENAI_API_KEY;
+    console.log('🔑 OpenAI API key check:', {
+      hasKey: !!openaiApiKey,
+      keyLength: openaiApiKey?.length || 0,
+      keyStart: openaiApiKey?.substring(0, 7) || 'none'
+    });
+    
     if (!openaiApiKey) {
-      console.error('OpenAI API key not found');
+      console.error('❌ OpenAI API key not found in environment variables');
       return NextResponse.json({
         error: 'AI service unavailable',
         message: 'OpenAI API key not configured'
@@ -41,10 +55,12 @@ export async function POST(request: NextRequest) {
     // Create the prompt for OpenAI
     const prompt = createEnhancedGameStatePrompt(gameState, xrayData);
     
-    console.log('Making OpenAI API call to o4-mini...');
+    console.log('🤖 Making OpenAI API call to o4-mini...');
+    console.log('📝 Prompt length:', prompt.length);
     
     // Call OpenAI o4-mini API
     try {
+      console.log('🌐 Sending request to OpenAI...');
       const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -63,8 +79,8 @@ export async function POST(request: NextRequest) {
               content: prompt
             }
           ],
-          max_tokens: 5000,
-          temperature: 0.7,
+          max_completion_tokens: 5000, // Fixed parameter name for o4-mini model
+          // temperature: removed - o4-mini only supports default (1)
         }),
       });
 

@@ -55,8 +55,12 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
   });
   
   const handleClick = () => {
+    console.log('🖱️ Hint button clicked!', { canRequestHint, isLoadingHint });
     if (canRequestHint && !isLoadingHint) {
+      console.log('✅ Requesting hint...');
       requestHint();
+    } else {
+      console.log('❌ Cannot request hint:', { canRequestHint, isLoadingHint });
     }
   };
   

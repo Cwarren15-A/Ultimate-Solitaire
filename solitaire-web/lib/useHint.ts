@@ -91,22 +91,33 @@ export function useEnhancedHint({
   } = useQuery({
     queryKey: ['enhanced-hint', serializeGameState(gameState), hintsUsed],
     queryFn: async (): Promise<EnhancedHintResponse> => {
+      console.log('🔍 useHint queryFn called');
       const xrayData = createXrayDataPrompt(gameState);
+      
+      const requestBody = {
+        gameState: serializeGameState(gameState),
+        xrayData,
+        moveHistory,
+        hintsUsed,
+        maxHints,
+        enhanced: true // Flag for enhanced AI
+      };
+      
+      console.log('📤 Sending hint request:', {
+        url: '/api/hint',
+        bodyKeys: Object.keys(requestBody),
+        gameStateLength: requestBody.gameState.length
+      });
       
       const response = await fetch('/api/hint', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          gameState: serializeGameState(gameState),
-          xrayData,
-          moveHistory,
-          hintsUsed,
-          maxHints,
-          enhanced: true // Flag for enhanced AI
-        }),
+        body: JSON.stringify(requestBody),
       });
+      
+      console.log('📥 Hint response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorData = await response.json();

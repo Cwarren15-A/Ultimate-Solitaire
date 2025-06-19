@@ -45,6 +45,27 @@ export async function POST(request: NextRequest) {
     // Parse game state
     try {
       state = JSON.parse(gameState);
+      console.log('🎮 Parsed game state structure:', {
+        hasFoundations: !!state?.foundations,
+        hasStock: !!state?.stock,
+        hasTableaux: !!state?.tableaux,
+        foundationKeys: state?.foundations ? Object.keys(state.foundations) : [],
+        stockCardCount: state?.stock?.cards?.length || 0,
+        tableauCount: state?.tableaux ? Object.keys(state.tableaux).length : 0
+      });
+
+      // Validate essential game state properties
+      if (!state?.foundations || !state?.stock || !state?.tableaux) {
+        console.error('❌ Invalid game state: missing essential properties');
+        const fallbackSolution = performLocalGameAnalysis(state);
+        return NextResponse.json({
+          ...fallbackSolution,
+          timeToSolve: 0.5,
+          aiPowered: false,
+          fallback: true,
+          error: 'Invalid game state structure - using fallback analysis'
+        });
+      }
     } catch (parseError) {
       console.error('Failed to parse game state:', parseError);
       return NextResponse.json({
@@ -70,9 +91,9 @@ export async function POST(request: NextRequest) {
     // Create simplified prompt for AI solver
     const solverPrompt = `${GAME_SOLVER_PROMPT}
 
-Foundation progress: ${Object.values(state.foundations).map((f: any) => f.cards.length).join(',')}
-Stock cards: ${state.stock.cards.length}
-Visible tableau: ${Object.values(state.tableaux).map((t: any) => t.cards.filter((c: any) => c.faceUp).length).join(',')}`;
+Foundation progress: ${Object.values(state?.foundations || {}).map((f: any) => f?.cards?.length || 0).join(',')}
+Stock cards: ${state?.stock?.cards?.length || 0}
+Visible tableau: ${Object.values(state?.tableaux || {}).map((t: any) => t?.cards?.filter((c: any) => c.faceUp)?.length || 0).join(',')}`;
 
     console.log('🤖 Making OpenAI API call for game solving...');
     

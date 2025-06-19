@@ -104,3 +104,8 @@ export const resetGame = (drawMode: 1 | 3 = 1): GameState => {
 export const newGame = (currentState: GameState): GameState => {
   return dealNewGame({ drawMode: currentState.drawMode });
 };
+
+/**
+ * Alias for dealNewGame - for backwards compatibility
+ */
+export const initGame = dealNewGame;

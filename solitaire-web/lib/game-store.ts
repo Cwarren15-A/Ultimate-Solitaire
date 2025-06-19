@@ -13,6 +13,7 @@ interface GameStore {
   
   // Actions
   newGame: () => void;
+  startNewGame: (drawMode?: 1 | 3) => void;
   makeMove: (move: Move, silent?: boolean) => boolean;
   undo: () => void;
   redo: () => void;
@@ -37,6 +38,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   
   newGame: () => {
     const newState = initGame();
+    set({
+      currentState: newState,
+      moveHistory: [],
+      redoStack: [],
+      hintsUsed: 0,
+      canUndo: false,
+      canRedo: false,
+    });
+    analytics.gameStarted();
+  },
+
+  startNewGame: (drawMode?: 1 | 3) => {
+    const currentDrawMode = drawMode || get().currentState.drawMode;
+    const newState = initGame({ drawMode: currentDrawMode });
     set({
       currentState: newState,
       moveHistory: [],

@@ -215,3 +215,19 @@ export const getPileById = (gameState: GameState, pileId: PileId) => {
     default: return null;
   }
 };
+
+/**
+ * Makes a move and returns result with success status
+ */
+export const makeMove = (gameState: GameState, move: Move): { success: boolean; state?: GameState; error?: string } => {
+  try {
+    if (!isValidMove(move, gameState)) {
+      return { success: false, error: "Invalid move" };
+    }
+    
+    const newState = applyMove(move, gameState);
+    return { success: true, state: newState };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" };
+  }
+};

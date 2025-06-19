@@ -168,12 +168,12 @@ export function useEnhancedHint({
 
   const requestHint = useCallback(async () => {
     if (!canRequestHint) {
-      onError?.('🧠 All X-ray analyses used! Start a new game for more strategic insights.');
+      onError?.('🧠 All hints used! Start a new game for more strategic insights.');
       return;
     }
 
     if (gameState.isComplete) {
-      onError?.('🎉 Game completed! Start a new challenge to use X-ray vision again.');
+      onError?.('🎉 Game completed! Start a new challenge to use hints again.');
       return;
     }
 
@@ -204,7 +204,7 @@ export function useEnhancedHint({
         }
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to get X-ray analysis';
+      const errorMessage = error instanceof Error ? error.message : 'Failed to get AI hint';
       onError?.(errorMessage);
       analytics.error('enhanced_hint_request_failed', { error: errorMessage });
     }

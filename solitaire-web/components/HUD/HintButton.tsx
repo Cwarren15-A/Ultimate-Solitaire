@@ -84,7 +84,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
         whileHover={!isDisabled ? { scale: 1.05 } : {}}
         whileTap={!isDisabled ? { scale: 0.95 } : {}}
         disabled={isDisabled}
-        aria-label={`X-ray vision analysis. ${hintsRemaining} analyses remaining`}
+        aria-label={`AI hint analysis. ${hintsRemaining} hints remaining`}
       >
         {/* Enhanced Icon */}
         {isLoadingHint ? (
@@ -97,7 +97,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
         
         {/* Enhanced Button Text */}
         <span>
-          {isLoadingHint ? 'X-ray scanning...' : 'X-Ray Vision'}
+          {isLoadingHint ? 'Getting hint...' : 'Hint'}
         </span>
         
         {/* Enhanced Hints Counter */}
@@ -128,10 +128,10 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
             style={{ zIndex: 999998 }}
           >
             {currentState.isComplete 
-              ? '🎉 Game completed! Start new game for X-ray vision' 
+              ? '🎉 Game completed! Start new game for more hints' 
               : !canRequestHint 
-                ? '🧠 All X-ray analyses used for this game'
-                : '👁️ See through cards with AI X-ray vision'
+                ? '🧠 All hints used for this game'
+                : '🤖 Get AI strategy hints for your next move'
             }
             <div className="absolute top-full left-1/2 transform -translate-x-1/2 
                             border-2 border-transparent border-t-gray-900"></div>
@@ -155,7 +155,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
               {/* Header */}
               <div className="flex items-center space-x-2 border-b border-purple-500/20 pb-2">
                 <Brain className="h-4 w-4 text-purple-400" />
-                <span className="text-sm font-semibold text-purple-200">X-Ray Analysis</span>
+                <span className="text-sm font-semibold text-purple-200">AI Hint</span>
                 {analysisData?.xrayEnabled && (
                   <span className="text-xs bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full">
                     ENHANCED

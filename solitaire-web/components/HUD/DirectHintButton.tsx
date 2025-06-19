@@ -15,6 +15,7 @@ interface DirectHintButtonProps {
 export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(0);
+  const [enhancedMode, setEnhancedMode] = useState(false);
   const [hintDisplay, setHintDisplay] = useState<{
     show: boolean;
     data: any;
@@ -44,7 +45,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
           moveHistory: [],
           hintsUsed,
           maxHints,
-          enhanced: true
+          enhanced: enhancedMode
         }),
       });
 
@@ -72,11 +73,12 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
       console.log('🎯 Hint display set:', { show: true, id: displayId });
 
-      // Auto-hide after 15 seconds
+      // Auto-hide after different times based on mode
+      const hideDelay = enhancedMode ? 25000 : 15000; // 25s for enhanced, 15s for quick
       timeoutRef.current = setTimeout(() => {
         console.log('⏰ Auto-hiding hint display');
         setHintDisplay(prev => ({ ...prev, show: false }));
-      }, 15000);
+      }, hideDelay);
 
     } catch (error) {
       console.error('❌ Direct hint failed:', error);
@@ -107,6 +109,32 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
   return (
     <div className="relative">
+      {/* Mode Toggle */}
+      <div className="flex items-center space-x-1 mb-2">
+        <button
+          onClick={() => setEnhancedMode(false)}
+          className={`px-2 py-1 rounded text-xs border transition-colors ${
+            !enhancedMode 
+              ? 'bg-blue-600/30 text-blue-200 border-blue-500/30'
+              : 'bg-gray-600/30 text-gray-300 border-gray-500/30 hover:bg-gray-500/30'
+          }`}
+          title="Quick hint - Fast response, basic move suggestion"
+        >
+          ⚡ Quick
+        </button>
+        <button
+          onClick={() => setEnhancedMode(true)}
+          className={`px-2 py-1 rounded text-xs border transition-colors ${
+            enhancedMode 
+              ? 'bg-purple-600/30 text-purple-200 border-purple-500/30'
+              : 'bg-gray-600/30 text-gray-300 border-gray-500/30 hover:bg-gray-500/30'
+          }`}
+          title="Enhanced analysis - Detailed strategy, costs more tokens"
+        >
+          🧠 Enhanced
+        </button>
+      </div>
+
       {/* Hint Button */}
       <motion.button
         className={`
@@ -127,7 +155,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
         ) : (
           <Brain className="h-4 w-4 text-purple-200" />
         )}
-        <span>{isLoading ? 'Getting hint...' : 'Hint'}</span>
+        <span>{isLoading ? (enhancedMode ? 'Analyzing...' : 'Getting hint...') : (enhancedMode ? 'Enhanced Hint' : 'Quick Hint')}</span>
         {maxHints - hintsUsed > 0 && !isLoading && (
           <span className="ml-1 px-1.5 py-0.5 text-xs rounded-full bg-purple-500/30 text-purple-200">
             {maxHints - hintsUsed}
@@ -151,7 +179,9 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Brain className="h-5 w-5 text-purple-400" />
-                  <span className="text-lg font-semibold text-white">AI Hint</span>
+                  <span className="text-lg font-semibold text-white">
+                    {enhancedMode ? '🧠 Enhanced Analysis' : '⚡ Quick Hint'}
+                  </span>
                   {hintDisplay.data?.priority && (
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       hintDisplay.data.priority === 'critical' ? 'text-red-400 bg-red-500/20' :
@@ -267,7 +297,9 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
             {/* Footer */}
             <div className="bg-gray-800/50 px-4 py-2 border-t border-gray-600/30">
               <div className="flex items-center justify-between text-xs text-gray-400">
-                <span>Powered by OpenAI o4-mini</span>
+                <span>
+                  {enhancedMode ? '🧠 Enhanced Analysis' : '⚡ Quick Mode'} • OpenAI o4-mini
+                </span>
                 {hintDisplay.data?.message && (
                   <span className="text-purple-300">{hintDisplay.data.message}</span>
                 )}

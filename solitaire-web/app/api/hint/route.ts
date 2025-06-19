@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ENHANCED_SOLITAIRE_SYSTEM_PROMPT, createEnhancedGameStatePrompt, HINT_RATE_LIMIT_MESSAGE } from '@/lib/ai-prompts';
+import { QUICK_SOLITAIRE_SYSTEM_PROMPT, ENHANCED_SOLITAIRE_SYSTEM_PROMPT, createEnhancedGameStatePrompt, HINT_RATE_LIMIT_MESSAGE } from '@/lib/ai-prompts';
 
 export async function POST(request: NextRequest) {
   console.log('🚀 Hint API endpoint called!');
   
   try {
     const body = await request.json();
-    const { gameState, xrayData, moveHistory, hintsUsed, maxHints, enhanced } = body;
+    const { gameState, xrayData, moveHistory, hintsUsed, maxHints, enhanced = false } = body;
     
     console.log('📦 Request body received:', { 
       gameStateLength: gameState?.length, 
@@ -72,14 +72,16 @@ export async function POST(request: NextRequest) {
           messages: [
             {
               role: 'system',
-              content: ENHANCED_SOLITAIRE_SYSTEM_PROMPT
+              content: enhanced ? ENHANCED_SOLITAIRE_SYSTEM_PROMPT : QUICK_SOLITAIRE_SYSTEM_PROMPT
             },
             {
               role: 'user',
-              content: `Game: ${gameState.substring(0, 500)}... Give ONE move.`
+              content: enhanced 
+                ? `Current game state:\n${gameState.substring(0, 1000)}\n\nProvide comprehensive analysis.`
+                : `Game: ${gameState.substring(0, 500)}... Give ONE move.`
             }
           ],
-          max_completion_tokens: 100, // Much smaller for faster response
+          max_completion_tokens: enhanced ? 800 : 100, // More tokens for enhanced analysis
         }),
       });
 

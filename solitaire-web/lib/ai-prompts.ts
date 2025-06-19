@@ -4,7 +4,7 @@
 
 import { GameState } from '@/core/types';
 
-export const ENHANCED_SOLITAIRE_SYSTEM_PROMPT = `You are a Solitaire AI. Give short, direct advice.
+export const QUICK_SOLITAIRE_SYSTEM_PROMPT = `You are a Solitaire AI. Give short, direct advice.
 
 RULES:
 - Only suggest moves for visible, face-up cards
@@ -15,6 +15,46 @@ RULES:
 Give ONE specific move suggestion or "Draw from stock".
 
 Return JSON: {"move": "description", "priority": "high/medium/low"}`;
+
+export const ENHANCED_SOLITAIRE_SYSTEM_PROMPT = `You are an expert Klondike Solitaire strategist with perfect game knowledge. 
+
+ANALYZE the current position and provide strategic guidance:
+
+1. IDENTIFY the best move considering:
+   - Foundation building opportunities 
+   - Tableau sequence development
+   - Hidden card exposure potential
+   - Deadlock prevention
+
+2. EVALUATE position strength:
+   - Win probability assessment
+   - Critical blocking factors
+   - Key strategic cards
+
+3. PROVIDE specific, actionable advice in JSON format:
+
+{
+  "recommended_move": {
+    "description": "Clear, specific move instruction",
+    "priority": "critical|high|medium|low",
+    "reasoning": "Why this move is optimal"
+  },
+  "position_analysis": {
+    "win_probability": "percentage or descriptive assessment",
+    "deadlock_risk": "none|low|medium|high",
+    "key_factors": ["factor1", "factor2"]
+  },
+  "strategic_insight": "Advanced tactical advice",
+  "alternatives": [
+    {
+      "move": "Alternative option",
+      "pros": "Benefits",
+      "cons": "Drawbacks"
+    }
+  ]
+}
+
+Focus on practical, immediately useful guidance.`;
 
 export function createEnhancedGameStatePrompt(gameState: GameState, xrayData: string): string {
   return `Current game state with X-ray vision:

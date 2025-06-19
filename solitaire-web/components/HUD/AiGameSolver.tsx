@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 // @ts-ignore
 const { motion } = require("framer-motion");
 import { useGameStore } from "@/lib/game-store";
@@ -29,14 +29,25 @@ export default function AiGameSolver() {
   const [solution, setSolution] = useState<GameSolution | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false);
+  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false); // Disabled for debugging
   const [lastAnalysisTime, setLastAnalysisTime] = useState<number>(0);
   const [debugMode, setDebugMode] = useState(false);
   const { currentState } = useGameStore();
+  
+  // Add ref to track analysis state more reliably
+  const analysisRef = useRef(false);
 
   // Simplified auto-analysis with better logic
   useEffect(() => {
+    console.log('🔍 Auto-analysis effect triggered:', {
+      autoAnalyzeEnabled,
+      isComplete: currentState.isComplete,
+      isAnalyzing,
+      moves: currentState.moves
+    });
+
     if (!autoAnalyzeEnabled || currentState.isComplete || isAnalyzing) {
+      console.log('🚫 Auto-analysis skipped due to conditions');
       return;
     }
 
@@ -45,28 +56,39 @@ export default function AiGameSolver() {
     const timeSinceLastAnalysis = Date.now() - lastAnalysisTime;
     const shouldAnalyze = significantMoves.includes(currentState.moves) && timeSinceLastAnalysis > 10000; // 10 second cooldown
 
+    console.log('🔍 Auto-analysis check:', {
+      significantMove: significantMoves.includes(currentState.moves),
+      timeSinceLastAnalysis,
+      shouldAnalyze
+    });
+
     if (shouldAnalyze) {
       console.log('🔄 Auto-analyzing game at move', currentState.moves);
       const timer = setTimeout(() => {
+        console.log('⏰ Auto-analysis timer fired - calling solveGame()');
         solveGame();
       }, 2000); // 2 second delay
 
-      return () => clearTimeout(timer);
+      return () => {
+        console.log('🧹 Auto-analysis timer cleared');
+        clearTimeout(timer);
+      };
     }
   }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, isAnalyzing]);
 
   const solveGame = async () => {
-    if (isAnalyzing) {
-      console.log('⚠️ Analysis already in progress, skipping...');
+    if (isAnalyzing || analysisRef.current) {
+      console.log('⚠️ Analysis already in progress, skipping...', { isAnalyzing, refCurrent: analysisRef.current });
       return;
     }
     
     console.log('🤖 AI Game Solver: Starting analysis...');
+    analysisRef.current = true;
     setIsAnalyzing(true);
     setAnalysisProgress(0);
     setLastAnalysisTime(Date.now());
     
-    console.log('✅ Analysis state initialized');
+    console.log('✅ Analysis state initialized', { isAnalyzing: true, refCurrent: analysisRef.current });
     
     try {
       // Simulate progressive analysis
@@ -85,8 +107,9 @@ export default function AiGameSolver() {
         setAnalysisProgress(step.progress);
         
         // Exit early if analysis is cancelled
-        if (!isAnalyzing) {
-          console.log('❌ Analysis cancelled early');
+        if (!isAnalyzing || !analysisRef.current) {
+          console.log('❌ Analysis cancelled early - state changed');
+          console.log('🔍 Debug: step', i, 'progress', step.progress, 'isAnalyzing', isAnalyzing, 'refCurrent', analysisRef.current);
           return;
         }
       }
@@ -146,11 +169,12 @@ export default function AiGameSolver() {
         aiPowered: false,
         fallback: true
       });
-    } finally {
-      console.log('🔄 Cleaning up analysis state...');
-      setIsAnalyzing(false);
-      setAnalysisProgress(0);
-    }
+          } finally {
+        console.log('🔄 Cleaning up analysis state...');
+        analysisRef.current = false;
+        setIsAnalyzing(false);
+        setAnalysisProgress(0);
+      }
   };
 
   const performEnhancedLocalAnalysis = (): GameSolution => {
@@ -273,6 +297,8 @@ export default function AiGameSolver() {
   };
 
   const cancelAnalysis = () => {
+    console.log('🛑 Cancel analysis called');
+    analysisRef.current = false;
     setIsAnalyzing(false);
     setAnalysisProgress(0);
   };

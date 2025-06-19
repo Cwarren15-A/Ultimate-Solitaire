@@ -116,7 +116,7 @@ Visible tableau: ${Object.values(state?.tableaux || {}).map((t: any) => t?.cards
             content: solverPrompt
           }
         ],
-                 max_completion_tokens: 200, // Much smaller for faster response
+                 max_completion_tokens: 800, // Increased for more detailed analysis
       }),
     });
 

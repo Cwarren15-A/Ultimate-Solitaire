@@ -123,7 +123,8 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 10 }}
             className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 
-                       bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap z-50 border border-purple-500/30"
+                       bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap border border-purple-500/30"
+            style={{ zIndex: 999998 }}
           >
             {currentState.isComplete 
               ? '🎉 Game completed! Start new game for X-ray vision' 
@@ -144,9 +145,10 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
             initial={{ opacity: 0, y: -10, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
-            className="fixed top-16 left-1/2 transform -translate-x-1/2 p-4 
-                       bg-gradient-to-br from-gray-900 to-gray-800 border border-purple-500/30 
-                       rounded-xl shadow-2xl z-[99999] min-w-72 max-w-80 text-white backdrop-blur-sm"
+            className="fixed top-20 left-1/2 transform -translate-x-1/2 p-4 
+                       bg-gray-900/95 border-2 border-purple-400/60 
+                       rounded-xl shadow-2xl min-w-72 max-w-80 text-white backdrop-blur-md"
+            style={{ zIndex: 999999 }}
           >
             <div className="space-y-3">
               {/* Header */}
@@ -173,7 +175,7 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
                   <div className="text-sm font-medium text-yellow-300">
                     💡 Recommended Move:
                   </div>
-                  <div className="text-sm text-gray-200 bg-gray-800/50 p-2 rounded">
+                  <div className="text-sm text-white bg-gray-800/80 p-2 rounded border border-gray-600/30">
                     {analysisData.move.description}
                   </div>
                   {analysisData.move.visualHint?.message && (
@@ -211,9 +213,9 @@ export default function HintButton({ maxHints = 5 }: HintButtonProps) {
                   )}
 
                   {analysisData.analysis.hiddenCards && analysisData.analysis.hiddenCards !== 'No hidden card data' && (
-                    <div className="text-xs text-purple-300 bg-purple-900/20 p-2 rounded">
-                      <div className="font-medium mb-1">👁️ Hidden Cards Detected:</div>
-                      <div className="text-purple-200">{analysisData.analysis.hiddenCards}</div>
+                    <div className="text-xs text-purple-200 bg-purple-900/60 p-2 rounded border border-purple-600/40">
+                      <div className="font-medium mb-1 text-purple-100">👁️ Hidden Cards Detected:</div>
+                      <div className="text-purple-100">{analysisData.analysis.hiddenCards}</div>
                     </div>
                   )}
                 </div>

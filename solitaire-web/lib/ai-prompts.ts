@@ -79,10 +79,10 @@ export function createXrayDataPrompt(gameState: GameState): string {
   let xrayInfo = '';
   
   // Reveal tableau face-down cards
-  gameState.tableaux.forEach((tableau, index) => {
+  Object.entries(gameState.tableaux).forEach(([index, tableau]) => {
     const faceDownCards = tableau.cards.filter(card => !card.faceUp);
     if (faceDownCards.length > 0) {
-      xrayInfo += `\nTableau ${index + 1} hidden cards: ${faceDownCards.map(card => 
+      xrayInfo += `\nTableau ${index} hidden cards: ${faceDownCards.map(card => 
         `${card.rank}${card.suit}`
       ).join(', ')}`;
     }

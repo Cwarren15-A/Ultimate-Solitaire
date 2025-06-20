@@ -37,12 +37,11 @@ export default function AiGameSolver() {
   // Add ref to track analysis state more reliably
   const analysisRef = useRef(false);
 
-  // Simplified auto-analysis with better logic
+  // Simplified auto-analysis with better logic  
   useEffect(() => {
     console.log('🔍 Auto-analysis effect triggered:', {
       autoAnalyzeEnabled,
       isComplete: currentState.isComplete,
-      isAnalyzing,
       moves: currentState.moves
     });
 
@@ -74,7 +73,7 @@ export default function AiGameSolver() {
         clearTimeout(timer);
       };
     }
-  }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete]);
+  }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, lastAnalysisTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const solveGame = async () => {
     if (isAnalyzing || analysisRef.current) {

@@ -205,37 +205,47 @@ export default function AiGameSolver() {
       const stockCards = currentState?.stock?.cards?.length || 0;
       const wasteCards = currentState?.waste?.cards?.length || 0;
       
+      // Calculate total cards to ensure game isn't empty
+      const totalCards = foundationTotal + stockCards + wasteCards + 
+                        tableauAnalysis.reduce((sum, t) => sum + t.totalCards, 0);
+      
       // Calculate game progress and difficulty
       const progressRatio = foundationTotal / 52;
       const gamePhase = progressRatio < 0.25 ? 'early' : progressRatio < 0.75 ? 'middle' : 'late';
       
       // Enhanced win probability calculation
-      let winProbability = 75; // Base optimism
+      let winProbability = totalCards > 0 ? 75 : 0; // Base optimism only if cards exist
       
-      // Adjust based on game state
-      winProbability -= totalHiddenCards * 1.0; // Hidden cards reduce odds
-      winProbability += emptyTableauSpaces * 8; // Empty spaces help
-      winProbability += progressRatio * 25; // Progress improves odds
-      winProbability -= (stockCards > 20 ? 15 : 0); // Large stock reduces odds
-      winProbability += (kingsAvailable - emptyTableauSpaces) * 5; // Kings without spaces
-      
-      winProbability = Math.max(10, Math.min(95, winProbability));
+      if (totalCards > 0) {
+        // Adjust based on game state
+        winProbability -= totalHiddenCards * 1.0; // Hidden cards reduce odds
+        winProbability += emptyTableauSpaces * 8; // Empty spaces help
+        winProbability += progressRatio * 25; // Progress improves odds
+        winProbability -= (stockCards > 20 ? 15 : 0); // Large stock reduces odds
+        winProbability += (kingsAvailable - emptyTableauSpaces) * 5; // Kings without spaces
+        
+        winProbability = Math.max(20, Math.min(95, winProbability));
+      }
       
       // Enhanced move estimation
       const cardsRemaining = 52 - foundationTotal;
       let estimatedMoves = Math.round(cardsRemaining * 0.6); // Base moves
       estimatedMoves += totalHiddenCards * 0.4; // Hidden cards add complexity
       estimatedMoves += Math.max(0, stockCards - 10) * 0.2; // Large stock adds moves
-      estimatedMoves = Math.max(5, Math.min(50, estimatedMoves));
+      estimatedMoves = Math.max(8, Math.min(50, estimatedMoves));
       
       // Key factors analysis
       const keyFactors = [];
-      if (totalHiddenCards > 15) keyFactors.push(`${totalHiddenCards} cards still hidden`);
-      if (stockCards > 20) keyFactors.push(`Large stock pile (${stockCards} cards)`);
-      if (emptyTableauSpaces === 0 && kingsAvailable > 0) keyFactors.push("Need to create empty spaces for Kings");
-      if (foundationTotal < 4) keyFactors.push("Early game - focus on Aces and 2s");
-      if (progressRatio > 0.7) keyFactors.push("Late game - careful sequencing needed");
-      if (emptyTableauSpaces > 2) keyFactors.push(`Good tableau management (${emptyTableauSpaces} empty spaces)`);
+      if (totalCards === 0) {
+        keyFactors.push("ERROR: No cards found in game state");
+      } else {
+        if (totalHiddenCards > 15) keyFactors.push(`${totalHiddenCards} cards still hidden`);
+        if (stockCards > 20) keyFactors.push(`Large stock pile (${stockCards} cards)`);
+        if (emptyTableauSpaces === 0 && kingsAvailable > 0) keyFactors.push("Need to create empty spaces for Kings");
+        if (foundationTotal < 4) keyFactors.push("Early game - focus on Aces and 2s");
+        if (progressRatio > 0.7) keyFactors.push("Late game - careful sequencing needed");
+        if (emptyTableauSpaces > 2) keyFactors.push(`Good tableau management (${emptyTableauSpaces} empty spaces)`);
+      }
       
       // Strategic move sequence
       const moveSequence = [
@@ -272,14 +282,16 @@ export default function AiGameSolver() {
       }
       
       return {
-        isWinnable: winProbability > 25,
+        isWinnable: winProbability > 25 && totalCards > 0,
         optimalMoves: estimatedMoves,
         confidence: Math.round(winProbability),
         moveSequence,
         timeToSolve: 1.2,
-        reasoning: `${gamePhase} game analysis: ${Math.round(progressRatio * 100)}% complete. ` +
-                  `${totalHiddenCards} hidden cards, ${emptyTableauSpaces} empty spaces. ` +
-                  `Win probability: ${Math.round(winProbability)}%`,
+        reasoning: totalCards === 0 
+          ? "No cards found in game state - unable to analyze"
+          : `${gamePhase} game analysis: ${Math.round(progressRatio * 100)}% complete. ` +
+            `${totalHiddenCards} hidden cards, ${emptyTableauSpaces} empty spaces. ` +
+            `Win probability: ${Math.round(winProbability)}%. Total cards: ${totalCards}`,
         keyFactors
       };
     } catch (analysisError) {

@@ -195,22 +195,22 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
         <>
           {/* Backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-black/30 z-[999998] animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/50 z-[999999] animate-in fade-in duration-200"
             onClick={closeHint}
           />
           
           {/* Hint panel */}
-          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900/98 border border-purple-400 rounded-lg shadow-2xl z-[9999998] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
+          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900 border-2 border-purple-400 rounded-lg shadow-2xl z-[9999999] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Brain className="h-5 w-5 text-purple-400" />
               <span className="text-lg font-semibold text-white">AI Hint</span>
               {hintData.success ? (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-300">
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-500/30 text-green-200 border border-green-500/50">
                   Success
                 </span>
               ) : (
-                <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-300">
+                <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-500/30 text-red-200 border border-red-500/50">
                   Error
                 </span>
               )}
@@ -218,20 +218,20 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
             <button
               onClick={closeHint}
               className="text-gray-400 hover:text-white transition-colors w-8 h-8 
-                         flex items-center justify-center rounded hover:bg-gray-700/50"
+                         flex items-center justify-center rounded hover:bg-gray-700"
             >
               <X className="h-4 w-4" />
             </button>
           </div>
           
           {/* Message */}
-          <div className="mb-4 text-sm text-blue-200">
+          <div className="mb-4 text-sm text-blue-200 bg-blue-500/10 p-3 rounded border border-blue-500/30">
             {hintData.message}
           </div>
 
           {/* Move Suggestion */}
           {hintData.move && (
-            <div className="bg-blue-500/20 p-3 rounded border border-blue-500/30 mb-4">
+            <div className="bg-blue-500/20 p-3 rounded border border-blue-500/50 mb-4">
               <div className="flex items-center space-x-2 mb-2">
                 <Lightbulb className="h-4 w-4 text-blue-400" />
                 <span className="text-blue-200 text-sm font-medium">Recommended Move</span>
@@ -247,13 +247,13 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
           {hintData.analysis && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-800/50 p-3 rounded">
+                <div className="bg-gray-800 p-3 rounded border border-gray-600">
                   <div className="text-xs text-gray-400 mb-1">Win Probability</div>
                   <div className="text-sm font-bold text-green-400">
                     {hintData.analysis.winProbability}
                   </div>
                 </div>
-                <div className="bg-gray-800/50 p-3 rounded">
+                <div className="bg-gray-800 p-3 rounded border border-gray-600">
                   <div className="text-xs text-gray-400 mb-1">Risk Level</div>
                   <div className={`text-sm font-bold ${getRiskColor(hintData.analysis.deadlockRisk)}`}>
                     {hintData.analysis.deadlockRisk.toUpperCase()}
@@ -262,7 +262,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
               </div>
 
               {hintData.analysis.strategicInsight && (
-                <div className="bg-purple-900/20 p-3 rounded border border-purple-600/30">
+                <div className="bg-purple-900/30 p-3 rounded border border-purple-600/50">
                   <div className="text-xs text-purple-200 mb-1">Strategic Insight</div>
                   <div className="text-sm text-purple-100">{hintData.analysis.strategicInsight}</div>
                 </div>
@@ -272,7 +272,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
           {/* Error Display */}
           {hintData.error && (
-            <div className="bg-red-500/20 p-3 rounded border border-red-500/30 mb-4">
+            <div className="bg-red-500/20 p-3 rounded border border-red-500/50 mb-4">
               <div className="text-red-200 text-sm font-medium mb-1">Error Details</div>
               <div className="text-red-100 text-sm">{hintData.error}</div>
             </div>
@@ -280,7 +280,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
 
           {/* Debug Info (only in development) */}
           {debugMode && hintData.debug && (
-            <div className="mt-4 bg-gray-800/50 p-3 rounded border border-gray-600/30">
+            <div className="mt-4 bg-gray-800 p-3 rounded border border-gray-600">
               <div className="text-xs text-gray-400 mb-2 font-medium">Debug Info</div>
               <pre className="text-xs text-gray-300 overflow-auto max-h-20 font-mono leading-tight">
                 {JSON.stringify(hintData.debug, null, 2)}
@@ -289,7 +289,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
           )}
 
           {/* Hints Used */}
-          <div className="text-center mt-4 pt-3 border-t border-gray-600/30">
+          <div className="text-center mt-4 pt-3 border-t border-gray-600">
             <div className="text-xs text-gray-400">
               Hints Used: {hintData.hintsUsed} / {hintData.hintsUsed + hintData.hintsRemaining}
             </div>

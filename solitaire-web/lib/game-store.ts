@@ -13,6 +13,14 @@ interface GameAnalysisBaseline {
   keyFactors: string[];
   isWinnable: boolean;
   analysisTimestamp: number;
+  // Add optimal sequence storage
+  optimalSequence?: Array<{
+    move: string;
+    from: string;
+    to: string;
+    card: string;
+    moveNumber: number;
+  }>;
 }
 
 interface GameStore {
@@ -40,6 +48,10 @@ interface GameStore {
   // Add baseline analysis methods
   analyzeInitialGameState: () => Promise<void>;
   getPerformanceComparison: () => { efficiency: number; analysis: string } | null;
+  
+  // Add optimal sequence methods
+  getNextOptimalMove: () => { move: string; from: string; to: string; card: string } | null;
+  getCurrentMoveInSequence: () => number;
   
   // Computed
   canUndo: boolean;
@@ -106,49 +118,65 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
   // Add method to analyze initial game state
   analyzeInitialGameState: async () => {
-    const { currentState, isAnalyzingBaseline } = get();
+    const { currentState } = get();
     
-    if (isAnalyzingBaseline || currentState.moves > 0) {
-      return; // Don't analyze if already analyzing or game has started
+    if (get().isAnalyzingBaseline) {
+      console.log('🔄 Baseline analysis already in progress');
+      return;
     }
     
-    console.log('🔬 Analyzing initial game state for baseline...');
     set({ isAnalyzingBaseline: true });
     
+    console.log('🎯 Starting baseline analysis for new game...');
+    
     try {
-      const requestBody = {
-        gameState: serializeGameState(currentState),
-        maxDepth: 35, // Slightly deeper analysis for baseline
-        timeLimit: 20000 // Longer timeout for baseline analysis
-      };
+      const gameState = serializeGameState(currentState);
       
       const response = await fetch('/api/solve-game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          gameState,
+          maxDepth: 30,
+          timeLimit: 10000
+        }),
       });
       
-      if (response.ok) {
-        const analysis = await response.json();
-        
-        const baseline: GameAnalysisBaseline = {
-          optimalMoves: analysis.optimalMoves,
-          confidence: analysis.confidence,
-          reasoning: analysis.reasoning,
-          keyFactors: analysis.keyFactors || [],
-          isWinnable: analysis.isWinnable,
-          analysisTimestamp: Date.now()
-        };
-        
-        set({ gameBaseline: baseline });
-        console.log('✅ Baseline analysis complete:', baseline);
-      } else {
-        console.warn('⚠️ Baseline analysis failed');
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.status}`);
       }
+      
+      const result = await response.json();
+      console.log('✅ Baseline analysis complete:', result);
+      
+      const baseline: GameAnalysisBaseline = {
+        optimalMoves: result.optimalMoves,
+        confidence: result.confidence,
+        reasoning: result.reasoning,
+        keyFactors: result.keyFactors,
+        isWinnable: result.isWinnable,
+        analysisTimestamp: Date.now(),
+        optimalSequence: result.optimalSequence || []
+      };
+      
+      set({ 
+        gameBaseline: baseline,
+        isAnalyzingBaseline: false 
+      });
+      
+      console.log('📊 Game baseline established:', {
+        optimalMoves: baseline.optimalMoves,
+        confidence: baseline.confidence,
+        hasSequence: !!baseline.optimalSequence && baseline.optimalSequence.length > 0,
+        sequenceLength: baseline.optimalSequence?.length || 0
+      });
+      
     } catch (error) {
-      console.error('❌ Baseline analysis error:', error);
-    } finally {
-      set({ isAnalyzingBaseline: false });
+      console.error('❌ Baseline analysis failed:', error);
+      set({ 
+        gameBaseline: null,
+        isAnalyzingBaseline: false 
+      });
     }
   },
 
@@ -355,5 +383,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
   isGameWon: () => {
     const { currentState } = get();
     return currentState.isComplete || false;
+  },
+
+  // Add optimal sequence methods
+  getNextOptimalMove: () => {
+    const { gameBaseline, currentState } = get();
+    
+    if (!gameBaseline || currentState.isComplete) {
+      return null;
+    }
+    
+    const optimalSequence = gameBaseline.optimalSequence;
+    if (!optimalSequence || optimalSequence.length === 0) {
+      return null;
+    }
+    
+    const currentMoveNumber = currentState.moves;
+    if (currentMoveNumber >= optimalSequence.length) {
+      return null; // Past the optimal sequence
+    }
+    
+    return optimalSequence[currentMoveNumber];
+  },
+
+  getCurrentMoveInSequence: () => {
+    const { currentState } = get();
+    return currentState.moves;
   },
 }));

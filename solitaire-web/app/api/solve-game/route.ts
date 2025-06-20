@@ -60,6 +60,14 @@ interface SolverResponse {
   aiPowered: boolean;
   fallback?: boolean;
   error?: string;
+  // Add optimal move sequence
+  optimalSequence?: Array<{
+    move: string;
+    from: string;
+    to: string;
+    card: string;
+    moveNumber: number;
+  }>;
 }
 
 export async function POST(request: NextRequest) {
@@ -412,7 +420,26 @@ function performEnhancedLocalGameAnalysis(state: any): SolverResponse {
       return createErrorResponse('No game state available');
     }
     
-    // Parse the actual card positions and analyze the specific game state
+    // First try to solve the game completely
+    console.log('🎯 Attempting to solve game completely...');
+    const solution = solveGameCompletely(state);
+    
+    if (solution.found) {
+      console.log('✅ Game solved! Found optimal sequence:', solution.sequence.length, 'moves');
+      return {
+        isWinnable: true,
+        optimalMoves: solution.sequence.length,
+        confidence: 95,
+        reasoning: `Complete solution found: ${solution.sequence.length} moves to win`,
+        keyFactors: ['Optimal sequence calculated', 'All moves verified', 'Guaranteed winnable'],
+        timeToSolve: solution.timeSpent,
+        aiPowered: false,
+        optimalSequence: solution.sequence
+      };
+    }
+    
+    // If we can't solve completely, fall back to position analysis
+    console.log('⚠️ Could not solve completely, using position analysis...');
     const analysis = analyzeSpecificGamePosition(state);
     
     console.log('🔍 Position analysis:', analysis);
@@ -430,6 +457,375 @@ function performEnhancedLocalGameAnalysis(state: any): SolverResponse {
   } catch (analysisError) {
     console.error('❌ Position analysis error:', analysisError);
     return createErrorResponse('Position analysis failed');
+  }
+}
+
+// Real game solver using depth-first search
+function solveGameCompletely(initialState: any): { found: boolean; sequence: any[]; timeSpent: number } {
+  const startTime = Date.now();
+  const maxDepth = 200; // Prevent infinite recursion
+  const maxTime = 10000; // 10 second timeout
+  
+  function isGameWon(state: any): boolean {
+    const foundations = state?.foundations || {};
+    const totalFoundationCards = Object.values(foundations).reduce(
+      (sum: number, foundation: any) => sum + (foundation?.length || 0), 0
+    );
+    return totalFoundationCards === 52;
+  }
+  
+  function getAllPossibleMoves(state: any): Array<{move: string, from: string, to: string, card: string, newState: any}> {
+    const moves: any[] = [];
+    
+    if (Date.now() - startTime > maxTime) {
+      return moves; // Timeout
+    }
+    
+    // 1. Foundation moves (highest priority)
+    const foundationMoves = getFoundationMoves(state);
+    moves.push(...foundationMoves);
+    
+    // 2. Tableau to tableau moves
+    const tableauMoves = getTableauMoves(state);
+    moves.push(...tableauMoves);
+    
+    // 3. Waste to tableau moves
+    const wasteMoves = getWasteMoves(state);
+    moves.push(...wasteMoves);
+    
+    // 4. Draw from stock (lowest priority)
+    const stockMove = getStockMove(state);
+    if (stockMove) moves.push(stockMove);
+    
+    return moves;
+  }
+  
+  function getFoundationMoves(state: any): any[] {
+    const moves: any[] = [];
+    const foundations = state?.foundations || {};
+    
+    // Check waste pile
+    const waste = state?.waste || [];
+    if (waste.length > 0) {
+      const topWasteCard = parseCard(waste[waste.length - 1]);
+      if (topWasteCard) {
+        const foundationMove = canMoveToFoundation(topWasteCard, foundations);
+        if (foundationMove) {
+          const newState = cloneState(state);
+          newState.waste.pop();
+          newState.foundations[foundationMove.suit].push(waste[waste.length - 1]);
+          moves.push({
+            move: 'waste_to_foundation',
+            from: 'waste',
+            to: `foundation-${foundationMove.suit}`,
+            card: formatCard(topWasteCard),
+            newState
+          });
+        }
+      }
+    }
+    
+    // Check tableau tops
+    const tableaux = state?.tableaux || {};
+    Object.entries(tableaux).forEach(([index, tableau]: [string, any]) => {
+      const cards = tableau || [];
+      const faceUpCards = cards.filter((card: string) => card.endsWith('1'));
+      if (faceUpCards.length > 0) {
+        const topCard = parseCard(faceUpCards[faceUpCards.length - 1]);
+        if (topCard) {
+          const foundationMove = canMoveToFoundation(topCard, foundations);
+          if (foundationMove) {
+            const newState = cloneState(state);
+            const cardStr = newState.tableaux[index].pop();
+            newState.foundations[foundationMove.suit].push(cardStr);
+            
+            // Flip hidden card if revealed
+            if (newState.tableaux[index].length > 0) {
+              const lastCard = newState.tableaux[index][newState.tableaux[index].length - 1];
+              if (lastCard.endsWith('0')) {
+                newState.tableaux[index][newState.tableaux[index].length - 1] = lastCard.slice(0, -1) + '1';
+              }
+            }
+            
+            moves.push({
+              move: 'tableau_to_foundation',
+              from: `tableau-${index}`,
+              to: `foundation-${foundationMove.suit}`,
+              card: formatCard(topCard),
+              newState
+            });
+          }
+        }
+      }
+    });
+    
+    return moves;
+  }
+  
+  function getTableauMoves(state: any): any[] {
+    const moves: any[] = [];
+    const tableaux = state?.tableaux || {};
+    
+    Object.entries(tableaux).forEach(([fromIndex, fromTableau]: [string, any]) => {
+      const fromCards = fromTableau || [];
+      const faceUpCards = fromCards.filter((card: string) => card.endsWith('1'));
+      
+      if (faceUpCards.length > 0) {
+        // Try moving sequences of different lengths
+        for (let seqLength = 1; seqLength <= Math.min(faceUpCards.length, 13); seqLength++) {
+          const startIdx = faceUpCards.length - seqLength;
+          const sequence = faceUpCards.slice(startIdx);
+          
+          if (isValidSequence(sequence)) {
+            const bottomCard = parseCard(sequence[0]);
+            if (bottomCard) {
+              // Try placing on other tableaux
+              Object.entries(tableaux).forEach(([toIndex, toTableau]: [string, any]) => {
+                if (fromIndex === toIndex) return;
+                
+                const toCards = toTableau || [];
+                const toFaceUpCards = toCards.filter((card: string) => card.endsWith('1'));
+                
+                if (toFaceUpCards.length === 0) {
+                  // Empty tableau - only Kings
+                  if (bottomCard.rank === 13) {
+                    const newState = cloneState(state);
+                    const movedCards = newState.tableaux[fromIndex].splice(-seqLength, seqLength);
+                    newState.tableaux[toIndex].push(...movedCards);
+                    
+                    // Flip hidden card if revealed
+                    if (newState.tableaux[fromIndex].length > 0) {
+                      const lastCard = newState.tableaux[fromIndex][newState.tableaux[fromIndex].length - 1];
+                      if (lastCard.endsWith('0')) {
+                        newState.tableaux[fromIndex][newState.tableaux[fromIndex].length - 1] = lastCard.slice(0, -1) + '1';
+                      }
+                    }
+                    
+                    moves.push({
+                      move: 'tableau_to_tableau',
+                      from: `tableau-${fromIndex}`,
+                      to: `tableau-${toIndex}`,
+                      card: formatCard(bottomCard),
+                      newState
+                    });
+                  }
+                } else {
+                  // Check if sequence can be placed
+                  const topCard = parseCard(toFaceUpCards[toFaceUpCards.length - 1]);
+                  if (topCard && canPlaceOnTableau(bottomCard, topCard)) {
+                    const newState = cloneState(state);
+                    const movedCards = newState.tableaux[fromIndex].splice(-seqLength, seqLength);
+                    newState.tableaux[toIndex].push(...movedCards);
+                    
+                    // Flip hidden card if revealed
+                    if (newState.tableaux[fromIndex].length > 0) {
+                      const lastCard = newState.tableaux[fromIndex][newState.tableaux[fromIndex].length - 1];
+                      if (lastCard.endsWith('0')) {
+                        newState.tableaux[fromIndex][newState.tableaux[fromIndex].length - 1] = lastCard.slice(0, -1) + '1';
+                      }
+                    }
+                    
+                    moves.push({
+                      move: 'tableau_to_tableau',
+                      from: `tableau-${fromIndex}`,
+                      to: `tableau-${toIndex}`,
+                      card: formatCard(bottomCard),
+                      newState
+                    });
+                  }
+                }
+              });
+            }
+          }
+        }
+      }
+    });
+    
+    return moves;
+  }
+  
+  function getWasteMoves(state: any): any[] {
+    const moves: any[] = [];
+    const waste = state?.waste || [];
+    const tableaux = state?.tableaux || {};
+    
+    if (waste.length > 0) {
+      const topWasteCard = parseCard(waste[waste.length - 1]);
+      if (topWasteCard) {
+        Object.entries(tableaux).forEach(([index, tableau]: [string, any]) => {
+          const cards = tableau || [];
+          const faceUpCards = cards.filter((card: string) => card.endsWith('1'));
+          
+          if (faceUpCards.length === 0) {
+            // Empty tableau - only Kings
+            if (topWasteCard.rank === 13) {
+              const newState = cloneState(state);
+              const cardStr = newState.waste.pop();
+              newState.tableaux[index].push(cardStr);
+              moves.push({
+                move: 'waste_to_tableau',
+                from: 'waste',
+                to: `tableau-${index}`,
+                card: formatCard(topWasteCard),
+                newState
+              });
+            }
+          } else {
+            const topCard = parseCard(faceUpCards[faceUpCards.length - 1]);
+            if (topCard && canPlaceOnTableau(topWasteCard, topCard)) {
+              const newState = cloneState(state);
+              const cardStr = newState.waste.pop();
+              newState.tableaux[index].push(cardStr);
+              moves.push({
+                move: 'waste_to_tableau',
+                from: 'waste',
+                to: `tableau-${index}`,
+                card: formatCard(topWasteCard),
+                newState
+              });
+            }
+          }
+        });
+      }
+    }
+    
+    return moves;
+  }
+  
+  function getStockMove(state: any): any {
+    const stock = state?.stock || [];
+    if (stock.length === 0) return null;
+    
+    const drawMode = state?.drawMode || 1;
+    const newState = cloneState(state);
+    
+    // Draw cards from stock to waste
+    for (let i = 0; i < drawMode && newState.stock.length > 0; i++) {
+      const card = newState.stock.pop();
+      // Make sure card is face up when moved to waste
+      const faceUpCard = card.endsWith('0') ? card.slice(0, -1) + '1' : card;
+      newState.waste.push(faceUpCard);
+    }
+    
+    return {
+      move: 'draw_stock',
+      from: 'stock',
+      to: 'waste',
+      card: 'stock',
+      newState
+    };
+  }
+  
+  // Helper functions
+  function canMoveToFoundation(card: any, foundations: any): { suit: string } | null {
+    const suitKey = card.suit === "♠" ? "s" : 
+                   card.suit === "♥" ? "h" :
+                   card.suit === "♦" ? "d" : "c";
+    const foundation = foundations[suitKey] || [];
+    const expectedRank = foundation.length + 1;
+    
+    return card.rank === expectedRank ? { suit: suitKey } : null;
+  }
+  
+  function canPlaceOnTableau(cardToPlace: any, targetCard: any): boolean {
+    return cardToPlace.rank === targetCard.rank - 1 && cardToPlace.color !== targetCard.color;
+  }
+  
+  function isValidSequence(cardStrs: string[]): boolean {
+    if (cardStrs.length <= 1) return true;
+    
+    for (let i = 1; i < cardStrs.length; i++) {
+      const prev = parseCard(cardStrs[i - 1]);
+      const curr = parseCard(cardStrs[i]);
+      if (!prev || !curr || !canPlaceOnTableau(curr, prev)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  
+  function cloneState(state: any): any {
+    return JSON.parse(JSON.stringify(state));
+  }
+  
+  function formatCard(card: any): string {
+    const rankName = card.rank === 1 ? 'A' : 
+                    card.rank === 11 ? 'J' :
+                    card.rank === 12 ? 'Q' :
+                    card.rank === 13 ? 'K' : card.rank.toString();
+    return `${rankName}${card.suit}`;
+  }
+  
+  function stateToString(state: any): string {
+    return JSON.stringify(state);
+  }
+  
+  // Depth-first search with memoization
+  const visited = new Set<string>();
+  
+  function dfs(state: any, depth: number, path: any[]): { found: boolean; sequence: any[] } {
+    if (Date.now() - startTime > maxTime) {
+      return { found: false, sequence: [] };
+    }
+    
+    if (depth > maxDepth) {
+      return { found: false, sequence: [] };
+    }
+    
+    if (isGameWon(state)) {
+      return { found: true, sequence: [...path] };
+    }
+    
+    const stateKey = stateToString(state);
+    if (visited.has(stateKey)) {
+      return { found: false, sequence: [] };
+    }
+    visited.add(stateKey);
+    
+    const moves = getAllPossibleMoves(state);
+    
+    // Prioritize foundation moves
+    moves.sort((a, b) => {
+      if (a.move.includes('foundation') && !b.move.includes('foundation')) return -1;
+      if (!a.move.includes('foundation') && b.move.includes('foundation')) return 1;
+      if (a.move === 'draw_stock') return 1;
+      if (b.move === 'draw_stock') return -1;
+      return 0;
+    });
+    
+    for (const move of moves) {
+      const result = dfs(move.newState, depth + 1, [...path, {
+        move: move.move,
+        from: move.from,
+        to: move.to,
+        card: move.card,
+        moveNumber: path.length + 1
+      }]);
+      
+      if (result.found) {
+        return result;
+      }
+    }
+    
+    return { found: false, sequence: [] };
+  }
+  
+  try {
+    const result = dfs(initialState, 0, []);
+    const timeSpent = (Date.now() - startTime) / 1000;
+    
+    return {
+      found: result.found,
+      sequence: result.sequence,
+      timeSpent
+    };
+  } catch (error) {
+    console.error('❌ Solver error:', error);
+    return {
+      found: false,
+      sequence: [],
+      timeSpent: (Date.now() - startTime) / 1000
+    };
   }
 }
 

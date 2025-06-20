@@ -6,7 +6,6 @@ import { useGameStore } from "@/lib/game-store";
 // @ts-ignore
 const { Brain, Loader2, X, Lightbulb } = require("lucide-react");
 import { serializeGameState } from '@/core/serialize';
-import { createXrayDataPrompt } from '@/lib/ai-prompts';
 
 interface DirectHintButtonProps {
   maxHints?: number;
@@ -57,7 +56,6 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
     try {
       const requestBody = {
         gameState: serializeGameState(currentState),
-        xrayData: createXrayDataPrompt(currentState),
         hintsUsed,
         maxHints,
         enhanced: enhancedMode
@@ -241,7 +239,7 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
                 <Lightbulb className="h-4 w-4 text-blue-400" />
                 <span className="text-blue-200 text-sm font-medium">Recommended Move</span>
               </div>
-              <div className="text-white font-medium">{hintData.move.description}</div>
+              <div className="text-white font-medium text-lg">{hintData.move.description}</div>
               {hintData.move.reasoning && (
                 <div className="text-blue-300 text-sm mt-1">{hintData.move.reasoning}</div>
               )}
@@ -265,13 +263,6 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
                   </div>
                 </div>
               </div>
-
-              {hintData.analysis.strategicInsight && (
-                <div className="bg-purple-900/30 p-3 rounded border border-purple-600/50">
-                  <div className="text-xs text-purple-200 mb-1">Strategic Insight</div>
-                  <div className="text-sm text-purple-100">{hintData.analysis.strategicInsight}</div>
-                </div>
-              )}
             </div>
           )}
 

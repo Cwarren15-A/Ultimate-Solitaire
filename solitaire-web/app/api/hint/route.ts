@@ -24,32 +24,30 @@ interface HintResponse {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('🚀 Hint API endpoint called!');
+  console.log('💡 Hint API called');
   
   try {
-    const body = await request.json();
-    const { gameState, xrayData, hintsUsed, maxHints, enhanced = false } = body;
+    const { gameState, enhanced = false, hintsUsed = 0, maxHints = 5 } = await request.json();
     
-    console.log('📦 Request received:', { 
-      gameStateLength: gameState?.length, 
+    console.log('📝 Request params:', { 
+      enhanced, 
       hintsUsed, 
       maxHints,
-      enhanced
+      gameStateLength: gameState?.length || 0 
     });
 
-    // Rate limiting check
     if (hintsUsed >= maxHints) {
       return NextResponse.json({
         success: false,
-        hintsUsed,
+        hintsUsed: maxHints,
         hintsRemaining: 0,
-        message: `You've used all ${maxHints} hints for this game. Start a new game for more!`,
-        error: 'Rate limit exceeded'
+        message: 'No hints remaining for this game',
+        error: 'Hint limit reached'
       } as HintResponse);
     }
 
-    // Validate game state
-    let parsedGameState: any;
+    // Parse the game state
+    let parsedGameState;
     try {
       parsedGameState = JSON.parse(gameState);
       console.log('✅ Game state parsed successfully');
@@ -59,10 +57,70 @@ export async function POST(request: NextRequest) {
         success: false,
         hintsUsed: hintsUsed + 1,
         hintsRemaining: maxHints - (hintsUsed + 1),
-        message: 'Invalid game state data',
+        message: 'Invalid game state format',
         error: 'Parse error'
-      } as HintResponse);
+      } as HintResponse, { status: 400 });
     }
+
+    // First, try to get the optimal move from the solved sequence
+    console.log('🎯 Checking for optimal move sequence...');
+    
+    try {
+      const solverResponse = await fetch(`${request.nextUrl.origin}/api/solve-game`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          gameState,
+          maxDepth: 30,
+          timeLimit: 5000 // Quick check for existing solution
+        }),
+      });
+      
+      if (solverResponse.ok) {
+        const solverResult = await solverResponse.json();
+        
+        if (solverResult.optimalSequence && solverResult.optimalSequence.length > 0) {
+          const currentMoves = parsedGameState.moves || 0;
+          
+          if (currentMoves < solverResult.optimalSequence.length) {
+            const nextOptimalMove = solverResult.optimalSequence[currentMoves];
+            
+            console.log('✅ Found optimal next move:', nextOptimalMove);
+            
+            // Create simple, direct hint response
+            const optimalHintResponse: HintResponse = {
+              success: true,
+              move: {
+                description: `${nextOptimalMove.card} to ${nextOptimalMove.to.replace('foundation-', '').replace('tableau-', 'column ').replace('waste', 'waste pile')}`,
+                from: nextOptimalMove.from,
+                to: nextOptimalMove.to,
+                reasoning: undefined // Remove reasoning for cleaner hints
+              },
+              analysis: {
+                winProbability: `${Math.round((currentMoves / solverResult.optimalMoves) * 100)}% complete`,
+                deadlockRisk: 'low',
+                strategicInsight: undefined // Remove strategic insight
+              },
+              hintsUsed: hintsUsed + 1,
+              hintsRemaining: maxHints - (hintsUsed + 1),
+              message: `🎯 Optimal move ${currentMoves + 1}/${solverResult.optimalMoves}`,
+              debug: {
+                usedOptimalSequence: true,
+                moveNumber: currentMoves + 1,
+                totalOptimalMoves: solverResult.optimalMoves
+              }
+            };
+            
+            return NextResponse.json(optimalHintResponse);
+          }
+        }
+      }
+    } catch (solverError) {
+      console.log('⚠️ Solver check failed, falling back to AI analysis:', solverError);
+    }
+
+    // Fallback to AI analysis if no optimal sequence available
+    console.log('🤖 Using AI analysis for hint...');
 
     // Get OpenAI API key
     const openaiApiKey = process.env.OPENAI_API_KEY;
@@ -90,7 +148,7 @@ export async function POST(request: NextRequest) {
             {
               role: 'user',
               content: enhanced 
-                ? `Analyze this Solitaire game:\n${gameState}\n\nX-ray data: ${xrayData}\n\nProvide detailed strategic analysis.`
+                ? `Analyze this Solitaire game:\n${gameState}\n\nProvide detailed strategic analysis.`
                 : `Quick hint for this Solitaire game:\n${gameState.substring(0, 800)}\n\nGive ONE specific move suggestion.`
             }
           ],

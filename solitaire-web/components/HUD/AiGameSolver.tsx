@@ -5,7 +5,7 @@ import { useState, useEffect, useRef } from "react";
 const { motion } = require("framer-motion");
 import { useGameStore } from "@/lib/game-store";
 // @ts-ignore
-const { Zap, Clock, Target, Brain, Play, Pause } = require("lucide-react");
+const { Zap, Clock, Target, Brain, Play, Pause, TrendingUp, Award } = require("lucide-react");
 import { serializeGameState } from '@/core/serialize';
 
 interface GameSolution {
@@ -29,15 +29,15 @@ export default function AiGameSolver() {
   const [solution, setSolution] = useState<GameSolution | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(false); // Disabled for debugging
+  const [autoAnalyzeEnabled, setAutoAnalyzeEnabled] = useState(true); // Enable by default
   const [lastAnalysisTime, setLastAnalysisTime] = useState<number>(0);
   const [debugMode, setDebugMode] = useState(false);
-  const { currentState } = useGameStore();
+  const { currentState, gameBaseline, isAnalyzingBaseline, getPerformanceComparison } = useGameStore();
   
   // Add ref to track analysis state more reliably
   const analysisRef = useRef(false);
 
-  // Simplified auto-analysis with better logic  
+  // Improved auto-analysis with better logic  
   useEffect(() => {
     console.log('🔍 Auto-analysis effect triggered:', {
       autoAnalyzeEnabled,
@@ -45,15 +45,16 @@ export default function AiGameSolver() {
       moves: currentState.moves
     });
 
+    // Don't analyze if disabled, game is complete, or already analyzing
     if (!autoAnalyzeEnabled || currentState.isComplete || analysisRef.current) {
       console.log('🚫 Auto-analysis skipped due to conditions');
       return;
     }
 
-    // Only auto-analyze on significant game changes
-    const significantMoves = [0, 5, 10, 15, 20, 25, 30]; // Analyze at these move counts
+    // Only auto-analyze on significant game changes (not at move 0 since baseline handles that)
+    const significantMoves = [5, 10, 20, 30, 40, 50]; // Analyze at these move counts
     const timeSinceLastAnalysis = Date.now() - lastAnalysisTime;
-    const shouldAnalyze = significantMoves.includes(currentState.moves) && timeSinceLastAnalysis > 10000; // 10 second cooldown
+    const shouldAnalyze = significantMoves.includes(currentState.moves) && timeSinceLastAnalysis > 15000; // 15 second cooldown
 
     console.log('🔍 Auto-analysis check:', {
       significantMove: significantMoves.includes(currentState.moves),
@@ -76,8 +77,12 @@ export default function AiGameSolver() {
   }, [currentState.moves, autoAnalyzeEnabled, currentState.isComplete, lastAnalysisTime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const solveGame = async () => {
-    if (isAnalyzing || analysisRef.current) {
-      console.log('⚠️ Analysis already in progress, skipping...', { isAnalyzing, refCurrent: analysisRef.current });
+    if (isAnalyzing || analysisRef.current || currentState.isComplete) {
+      console.log('⚠️ Analysis skipped:', { 
+        isAnalyzing, 
+        refCurrent: analysisRef.current, 
+        gameComplete: currentState.isComplete 
+      });
       return;
     }
     
@@ -302,6 +307,54 @@ export default function AiGameSolver() {
     setAnalysisProgress(0);
   };
 
+  // Get performance comparison data
+  const performanceComparison = getPerformanceComparison();
+
+  if (currentState.isComplete && performanceComparison) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center space-x-3"
+      >
+        {/* Victory message */}
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-green-600/30 to-emerald-600/30 
+                       px-3 py-2 rounded-lg border border-green-500/30">
+          <Award className="h-4 w-4 text-green-400" />
+          <span className="text-green-200 text-sm font-medium">🎉 Victory!</span>
+        </div>
+
+        {/* Performance metrics */}
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-600/30 to-purple-600/30 
+                       px-3 py-2 rounded-lg border border-blue-500/30">
+          <TrendingUp className="h-4 w-4 text-blue-400" />
+          <div className="text-blue-200 text-sm">
+            <span className="font-medium">{performanceComparison.efficiency}% Efficiency</span>
+            <div className="text-xs text-blue-300">
+              {gameBaseline?.optimalMoves} optimal • {currentState.moves} actual
+            </div>
+          </div>
+        </div>
+
+        {/* Efficiency rating */}
+        <div className={`flex items-center space-x-1 px-2 py-1 rounded border text-xs ${
+          performanceComparison.efficiency >= 75 
+            ? 'bg-green-600/30 border-green-500/30 text-green-200'
+            : performanceComparison.efficiency >= 60
+            ? 'bg-yellow-600/30 border-yellow-500/30 text-yellow-200'  
+            : 'bg-orange-600/30 border-orange-500/30 text-orange-200'
+        }`}>
+          <Target className="h-3 w-3" />
+          <span>
+            {performanceComparison.efficiency >= 90 ? 'Exceptional' :
+             performanceComparison.efficiency >= 75 ? 'Great' :
+             performanceComparison.efficiency >= 60 ? 'Good' : 'Learning'}
+          </span>
+        </div>
+      </motion.div>
+    );
+  }
+
   if (currentState.isComplete) {
     return (
       <motion.div
@@ -330,6 +383,34 @@ export default function AiGameSolver() {
         >
           {debugMode ? '🔍' : '👁️'}
         </button>
+      )}
+
+      {/* Baseline analysis indicator */}
+      {isAnalyzingBaseline && (
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600/30 to-purple-600/30 
+                        px-3 py-2 rounded-lg border border-indigo-500/30">
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+          >
+            <Brain className="h-4 w-4 text-indigo-400" />
+          </motion.div>
+          <span className="text-indigo-200 text-sm font-medium">Analyzing baseline...</span>
+        </div>
+      )}
+
+      {/* Show baseline results when available and not currently analyzing */}
+      {gameBaseline && !isAnalyzingBaseline && !isAnalyzing && (
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-indigo-600/30 to-blue-600/30 
+                        px-3 py-2 rounded-lg border border-indigo-500/30">
+          <Target className="h-4 w-4 text-indigo-400" />
+          <div className="text-indigo-200 text-sm">
+            <span className="font-medium">Target: {gameBaseline.optimalMoves} moves</span>
+            <div className="text-xs text-indigo-300">
+              {gameBaseline.confidence}% confidence • {gameBaseline.isWinnable ? 'Winnable' : 'Challenging'}
+            </div>
+          </div>
+        </div>
       )}
 
       {isAnalyzing ? (
@@ -451,18 +532,36 @@ export default function AiGameSolver() {
       )}
 
       {/* Debug info overlay */}
-      {debugMode && solution && (
+      {debugMode && (solution || gameBaseline) && (
         <div className="fixed top-20 right-4 w-80 bg-gray-900/95 border border-gray-600 rounded p-3 text-xs z-[9999]">
           <div className="text-gray-300">
-            <div>AI Powered: {solution.aiPowered ? 'Yes' : 'No'}</div>
-            <div>Fallback: {solution.fallback ? 'Yes' : 'No'}</div>
-            {solution.error && <div className="text-red-300">Error: {solution.error}</div>}
-            {solution.keyFactors && (
-              <div>
-                <div className="mt-2 font-medium">Key Factors:</div>
-                {solution.keyFactors.map((factor, i) => (
-                  <div key={i}>• {factor}</div>
-                ))}
+            {solution && (
+              <>
+                <div>AI Powered: {solution.aiPowered ? 'Yes' : 'No'}</div>
+                <div>Fallback: {solution.fallback ? 'Yes' : 'No'}</div>
+                {solution.error && <div className="text-red-300">Error: {solution.error}</div>}
+                {solution.keyFactors && (
+                  <div>
+                    <div className="mt-2 font-medium">Key Factors:</div>
+                    {solution.keyFactors.map((factor, i) => (
+                      <div key={i}>• {factor}</div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+            {gameBaseline && (
+              <div className="mt-3 pt-3 border-t border-gray-600">
+                <div className="font-medium">Baseline Analysis:</div>
+                <div>Optimal moves: {gameBaseline.optimalMoves}</div>
+                <div>Confidence: {gameBaseline.confidence}%</div>
+                <div>Winnable: {gameBaseline.isWinnable ? 'Yes' : 'No'}</div>
+                {performanceComparison && (
+                  <div className="mt-2">
+                    <div className="font-medium">Performance:</div>
+                    <div>Efficiency: {performanceComparison.efficiency}%</div>
+                  </div>
+                )}
               </div>
             )}
           </div>

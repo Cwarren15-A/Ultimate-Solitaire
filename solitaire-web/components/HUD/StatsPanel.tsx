@@ -2,6 +2,7 @@
 
 import { useStatsStore } from "../../lib/stats-store";
 import { motion } from "framer-motion";
+import { Clock, Target, Trophy, Zap } from "lucide-react";
 
 interface StatsCardProps {
   title: string;
@@ -117,6 +118,29 @@ export default function StatsPanel() {
             color="blue"
           />
         </div>
+
+        {/* AI Efficiency Stats */}
+        {stats.totalAnalyzedGames > 0 && (
+          <div className="mt-4">
+            <h4 className="text-md font-semibold text-green-100 mb-3">🤖 AI Performance Analysis</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <StatsCard
+                title="Best Efficiency"
+                value={formatPercentage(stats.bestEfficiency)}
+                subtitle="vs AI optimal"
+                icon="🎯"
+                color="purple"
+              />
+              <StatsCard
+                title="Avg Efficiency"
+                value={formatPercentage(stats.averageEfficiency)}
+                subtitle={`${stats.totalAnalyzedGames} analyzed games`}
+                icon="📊"
+                color="blue"
+              />
+            </div>
+          </div>
+        )}
       </div>
       
       {/* Recent Games */}
@@ -199,6 +223,7 @@ export default function StatsPanel() {
           )}
         </div>
       </div>
+
     </div>
   );
 }

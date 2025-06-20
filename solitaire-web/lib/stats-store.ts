@@ -14,6 +14,11 @@ export interface GameResult {
   drawMode: 1 | 3;
   timestamp: number;
   date: string; // ISO date string
+  
+  // Add efficiency tracking
+  optimalMoves?: number; // AI predicted optimal moves
+  efficiency?: number; // (optimal / actual) * 100
+  aiAnalysisAvailable?: boolean; // Whether AI baseline was available
 }
 
 export interface PlayerStats {
@@ -31,6 +36,11 @@ export interface PlayerStats {
   bestMoveCount: number; // fewest moves to win
   averageMoveCount: number;
   totalMoves: number;
+  
+  // Efficiency stats (new)
+  bestEfficiency: number; // highest efficiency percentage
+  averageEfficiency: number; // average efficiency for analyzed games
+  totalAnalyzedGames: number; // games with AI analysis
   
   // Streak stats
   currentStreak: number;
@@ -86,6 +96,12 @@ const createEmptyStats = (): PlayerStats => ({
   bestMoveCount: Infinity,
   averageMoveCount: 0,
   totalMoves: 0,
+  
+  // Initialize efficiency stats
+  bestEfficiency: 0,
+  averageEfficiency: 0,
+  totalAnalyzedGames: 0,
+  
   currentStreak: 0,
   bestStreak: 0,
   bestScore: 0,
@@ -132,6 +148,18 @@ const updateStatsWithGame = (stats: PlayerStats, result: GameResult): PlayerStat
     }
     if (result.score > newStats.bestScore) {
       newStats.bestScore = result.score;
+    }
+    
+    // Efficiency tracking (new)
+    if (result.efficiency && result.aiAnalysisAvailable) {
+      newStats.totalAnalyzedGames += 1;
+      newStats.bestEfficiency = Math.max(newStats.bestEfficiency, result.efficiency);
+      
+      // Calculate running average efficiency
+      const analyzedGames = newStats.recentGames.filter(g => g.completed && g.aiAnalysisAvailable);
+      if (analyzedGames.length > 0) {
+        newStats.averageEfficiency = analyzedGames.reduce((acc, g) => acc + (g.efficiency || 0), 0) / analyzedGames.length;
+      }
     }
   } else {
     // Loss breaks streak

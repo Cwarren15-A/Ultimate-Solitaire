@@ -3,6 +3,17 @@ import { GameState, Move } from '@/core/types';
 import { initGame } from '@/core/dealing';
 import { makeMove as makeMoveCore, drawFromStock } from '@/core';
 import { analytics } from './analytics';
+import { serializeGameState } from '@/core/serialize';
+
+// Add interface for storing AI analysis baseline
+interface GameAnalysisBaseline {
+  optimalMoves: number;
+  confidence: number;
+  reasoning: string;
+  keyFactors: string[];
+  isWinnable: boolean;
+  analysisTimestamp: number;
+}
 
 interface GameStore {
   currentState: GameState;
@@ -11,6 +22,10 @@ interface GameStore {
   redoStack: GameState[];
   hintsUsed: number;
   isHydrated: boolean;
+  
+  // Add AI analysis baseline tracking
+  gameBaseline: GameAnalysisBaseline | null;
+  isAnalyzingBaseline: boolean;
   
   // Actions
   newGame: () => void;
@@ -21,6 +36,10 @@ interface GameStore {
   drawCards: () => void;
   autoCompleteGame: () => void;
   hydrate: () => void;
+  
+  // Add baseline analysis methods
+  analyzeInitialGameState: () => Promise<void>;
+  getPerformanceComparison: () => { efficiency: number; analysis: string } | null;
   
   // Computed
   canUndo: boolean;
@@ -38,6 +57,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   canUndo: false,
   canRedo: false,
   
+  // Initialize new baseline tracking properties
+  gameBaseline: null,
+  isAnalyzingBaseline: false,
+  
   newGame: () => {
     const newState = initGame();
     set({
@@ -48,8 +71,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hintsUsed: 0,
       canUndo: false,
       canRedo: false,
+      gameBaseline: null, // Reset baseline for new game
+      isAnalyzingBaseline: false,
     });
     analytics.gameStarted();
+    
+    // Analyze the new game state for optimal solution baseline
+    setTimeout(() => {
+      get().analyzeInitialGameState();
+    }, 1000); // Small delay to let game settle
   },
 
   startNewGame: (drawMode?: 1 | 3) => {
@@ -63,8 +93,94 @@ export const useGameStore = create<GameStore>((set, get) => ({
       hintsUsed: 0,
       canUndo: false,
       canRedo: false,
+      gameBaseline: null, // Reset baseline for new game
+      isAnalyzingBaseline: false,
     });
     analytics.gameStarted();
+    
+    // Analyze the new game state for optimal solution baseline
+    setTimeout(() => {
+      get().analyzeInitialGameState();
+    }, 1000); // Small delay to let game settle
+  },
+
+  // Add method to analyze initial game state
+  analyzeInitialGameState: async () => {
+    const { currentState, isAnalyzingBaseline } = get();
+    
+    if (isAnalyzingBaseline || currentState.moves > 0) {
+      return; // Don't analyze if already analyzing or game has started
+    }
+    
+    console.log('🔬 Analyzing initial game state for baseline...');
+    set({ isAnalyzingBaseline: true });
+    
+    try {
+      const requestBody = {
+        gameState: serializeGameState(currentState),
+        maxDepth: 35, // Slightly deeper analysis for baseline
+        timeLimit: 20000 // Longer timeout for baseline analysis
+      };
+      
+      const response = await fetch('/api/solve-game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (response.ok) {
+        const analysis = await response.json();
+        
+        const baseline: GameAnalysisBaseline = {
+          optimalMoves: analysis.optimalMoves,
+          confidence: analysis.confidence,
+          reasoning: analysis.reasoning,
+          keyFactors: analysis.keyFactors || [],
+          isWinnable: analysis.isWinnable,
+          analysisTimestamp: Date.now()
+        };
+        
+        set({ gameBaseline: baseline });
+        console.log('✅ Baseline analysis complete:', baseline);
+      } else {
+        console.warn('⚠️ Baseline analysis failed');
+      }
+    } catch (error) {
+      console.error('❌ Baseline analysis error:', error);
+    } finally {
+      set({ isAnalyzingBaseline: false });
+    }
+  },
+
+  // Add method to get performance comparison
+  getPerformanceComparison: () => {
+    const { gameBaseline, moveHistory, currentState } = get();
+    
+    if (!gameBaseline || !currentState.isComplete) {
+      return null;
+    }
+    
+    const actualMoves = moveHistory.length;
+    const optimalMoves = gameBaseline.optimalMoves;
+    const efficiency = Math.round((optimalMoves / actualMoves) * 100);
+    
+    let analysis = '';
+    if (efficiency >= 90) {
+      analysis = '🎯 Exceptional! Nearly optimal performance';
+    } else if (efficiency >= 75) {
+      analysis = '⭐ Great! Very efficient solution';
+    } else if (efficiency >= 60) {
+      analysis = '👍 Good! Room for some improvement';
+    } else if (efficiency >= 45) {
+      analysis = '📈 Decent! Consider more strategic planning';
+    } else {
+      analysis = '🎓 Learning opportunity! Focus on efficiency';
+    }
+    
+    return {
+      efficiency,
+      analysis: `${analysis}\nAI predicted: ${optimalMoves} moves | You used: ${actualMoves} moves`
+    };
   },
   
   makeMove: (move: Move, silent: boolean = false) => {
@@ -86,7 +202,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       
       if (result.state.isComplete) {
-        analytics.gameWon(get().moveHistory.length);
+        const comparison = get().getPerformanceComparison();
+        const { gameBaseline } = get();
+        
+        // Pass baseline data to analytics for efficiency tracking
+        analytics.gameWon(get().moveHistory.length, gameBaseline);
+        
+        // Log performance comparison for debugging
+        if (comparison) {
+          console.log('🏆 Game completed with performance analysis:', comparison);
+        }
       }
       
       return true;

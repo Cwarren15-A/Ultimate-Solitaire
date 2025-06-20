@@ -23,31 +23,32 @@ interface HintResponse {
   debug?: any; // For debugging
 }
 
-const ENHANCED_SOLVER_PROMPT = `You are a Klondike Solitaire expert analyzing game positions. 
+const ENHANCED_SOLVER_PROMPT = `You are a master Klondike Solitaire analyst with deep strategic understanding.
 
-IMPORTANT: The game state uses compact notation:
-- Cards format: "s5a1" = 5 of Spades, face up
-- s=Spades, h=Hearts, d=Diamonds, c=Clubs  
-- Ranks: 1=Ace, b=11(Jack), c=12(Queen), d=13(King)
-- Last digit: 1=face up, 0=face down
+ANALYSIS TASK: Evaluate the given position and provide realistic move estimates based on:
+1. Current foundation progress (cards already placed)
+2. Available immediate moves 
+3. Hidden cards that need to be revealed
+4. Tableau structure and sequence building potential
+5. Stock pile management requirements
+6. Empty space availability for Kings
 
 Return ONLY this JSON format:
 {
   "isWinnable": boolean,
-  "optimalMoves": number (realistic estimate 8-50),
-  "confidence": number (0-100),
-  "reasoning": "brief explanation of analysis",
-  "keyFactors": ["key observation 1", "key observation 2"]
+  "optimalMoves": number (realistic estimate based on position),
+  "confidence": number (10-95),
+  "reasoning": "specific analysis of this position",
+  "keyFactors": ["specific observation 1", "specific observation 2", "specific observation 3"]
 }
 
-ANALYSIS RULES:
-1. If you see cards in tableau/stock/waste, the game is NOT empty
-2. Count face-up cards and potential moves carefully
-3. Consider card accessibility and sequence building
-4. Estimate moves based on cards remaining and complexity
-5. Be realistic - most games take 15-40 moves if winnable
+MOVE ESTIMATION GUIDELINES:
+- Opening positions (0-10% progress): Usually 40-60 moves
+- Early game (10-30% progress): Usually 25-45 moves  
+- Mid game (30-70% progress): Usually 15-30 moves
+- Late game (70%+ progress): Usually 5-20 moves
 
-Focus on accuracy over speed. If uncertain, explain your reasoning clearly.`;
+Be specific about THIS position, not generic. Analyze what you actually see.`;
 
 interface SolverResponse {
   isWinnable: boolean;
@@ -135,27 +136,116 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Skip OpenAI entirely - use sophisticated local analysis for accuracy and speed
-    console.log('🚀 Using advanced position-specific analysis (OpenAI disabled for accuracy)');
+    // Get OpenAI API key
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      console.error('❌ OpenAI API key not found');
+      const fallbackSolution = performEnhancedLocalGameAnalysis(parsedState);
+      return NextResponse.json({
+        ...fallbackSolution,
+        error: 'OpenAI API key not configured',
+        fallback: true
+      });
+    }
 
-    // Use sophisticated local analysis exclusively (AI disabled due to inaccuracy)
+    // Create enhanced game state analysis for AI
+    const detailedAnalysis = createDetailedGameAnalysis(parsedState);
+    const enhancedPrompt = createEnhancedAnalysisPrompt(detailedAnalysis);
+
+    console.log('🤖 Making OpenAI API call with enhanced prompt...');
+    console.log('📝 Detailed analysis preview:', detailedAnalysis.substring(0, 300) + '...');
+    
+    // Call OpenAI with enhanced prompt
+    const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: ENHANCED_SOLVER_PROMPT
+          },
+          {
+            role: 'user',
+            content: enhancedPrompt
+          }
+        ],
+        max_completion_tokens: 1000,
+        temperature: 0.1, // Very low for consistent analysis
+      }),
+    });
+
+    // Add timeout to OpenAI request
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('OpenAI request timeout')), timeLimit);
+    });
+
+    const openaiResponse = await Promise.race([openaiPromise, timeoutPromise]) as Response;
+
+    if (!openaiResponse.ok) {
+      const errorData = await openaiResponse.json();
+      console.error('❌ OpenAI API error:', errorData);
+      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
+    }
+
+    const openaiData = await openaiResponse.json();
+    console.log('✅ OpenAI analysis response received');
+    
+    const aiAnalysis = openaiData.choices[0]?.message?.content;
+    if (!aiAnalysis) {
+      throw new Error('No analysis returned from OpenAI');
+    }
+
+    console.log('🎯 AI Analysis:', aiAnalysis);
+
+    // Parse AI response
+    let aiSolution: any = null;
+    try {
+      const jsonMatch = aiAnalysis.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        aiSolution = JSON.parse(jsonMatch[0]);
+        console.log('✅ Successfully parsed AI JSON response:', aiSolution);
+      } else {
+        console.warn('⚠️ No JSON found in AI response');
+        throw new Error('No JSON in AI response');
+      }
+    } catch (parseError) {
+      console.log('⚠️ Could not parse AI response, using local analysis');
+      aiSolution = null;
+    }
+
+    // Enhanced local analysis as backup
     const localAnalysis = performEnhancedLocalGameAnalysis(parsedState);
     
-    console.log('🚫 Skipping AI analysis - using sophisticated local analysis for accuracy');
-    
+    // Use AI analysis if available and reasonable, otherwise use enhanced local analysis
     const solution: SolverResponse = {
-      isWinnable: localAnalysis.isWinnable,
-      optimalMoves: localAnalysis.optimalMoves,
-      confidence: localAnalysis.confidence,
-      reasoning: localAnalysis.reasoning,
-      keyFactors: localAnalysis.keyFactors,
+      isWinnable: aiSolution?.isWinnable ?? localAnalysis.isWinnable,
+      optimalMoves: aiSolution?.optimalMoves ?? localAnalysis.optimalMoves,
+      confidence: aiSolution?.confidence ?? localAnalysis.confidence,
+      reasoning: aiSolution?.reasoning ?? localAnalysis.reasoning,
+      keyFactors: aiSolution?.keyFactors ?? localAnalysis.keyFactors,
       timeToSolve: parseFloat((Date.now() % 5000 / 1000).toFixed(1)),
-      aiPowered: false // Always false now
+      aiPowered: !!aiSolution
     };
 
-    // Validate analysis values
+    // Validate and sanitize AI response values
     solution.optimalMoves = Math.max(5, Math.min(150, solution.optimalMoves));
-    solution.confidence = Math.max(5, Math.min(95, solution.confidence));
+    solution.confidence = Math.max(10, Math.min(95, solution.confidence));
+    
+    // If AI gave obviously wrong answer, override with local analysis
+    if (aiSolution && (aiSolution.optimalMoves < 8 || aiSolution.confidence < 10)) {
+      console.warn('⚠️ AI gave suspicious answer, using enhanced local analysis instead');
+      solution.isWinnable = localAnalysis.isWinnable;
+      solution.optimalMoves = localAnalysis.optimalMoves;
+      solution.confidence = localAnalysis.confidence;
+      solution.reasoning = `AI override: ${localAnalysis.reasoning}`;
+      solution.keyFactors = localAnalysis.keyFactors;
+      solution.aiPowered = false;
+    }
 
     console.log('🎯 Final solution:', {
       isWinnable: solution.isWinnable,
@@ -185,39 +275,133 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function createEnhancedGameStateSummary(state: any): string {
+function createDetailedGameAnalysis(state: any): string {
   try {
     const foundationTotal = Object.values(state?.foundations || {}).reduce(
       (sum: number, foundation: any) => sum + (foundation?.length || 0), 0
     );
     
+    const progressPercent = Math.round((foundationTotal / 52) * 100);
     const stockCards = state?.stock?.length || 0;
     const wasteCards = state?.waste?.length || 0;
+    const moves = state?.moves || 0;
     
-    const tableauInfo = Object.entries(state?.tableaux || {}).map(([index, tableau]: [string, any]) => {
-      const totalCards = tableau?.length || 0;
-      return `T${index}: ${totalCards} cards`;
+    // Analyze each tableau in detail
+    const tableauAnalysis = Object.entries(state?.tableaux || {}).map(([index, tableau]: [string, any]) => {
+      const cards = tableau || [];
+      const faceDownCards = cards.filter((card: string) => card.endsWith('0')).length;
+      const faceUpCards = cards.filter((card: string) => card.endsWith('1'));
+      const isEmpty = cards.length === 0;
+      
+      let description = `Tableau ${index}: `;
+      if (isEmpty) {
+        description += "EMPTY (available for King)";
+      } else {
+        description += `${cards.length} cards (${faceDownCards} hidden, ${faceUpCards.length} visible)`;
+        if (faceUpCards.length > 0) {
+          const topCard = parseCard(faceUpCards[faceUpCards.length - 1]);
+          if (topCard) {
+            const rankName = topCard.rank === 1 ? 'A' : 
+                           topCard.rank === 11 ? 'J' :
+                           topCard.rank === 12 ? 'Q' :
+                           topCard.rank === 13 ? 'K' : topCard.rank.toString();
+            description += ` - Top: ${rankName}${topCard.suit}`;
+          }
+        }
+      }
+      return description;
     });
     
-    const totalCards = stockCards + wasteCards + foundationTotal + 
-                      Object.values(state?.tableaux || {}).reduce((sum: number, tableau: any) => 
-                        sum + (tableau?.length || 0), 0);
+    // Analyze waste pile
+    let wasteAnalysis = "Waste pile: ";
+    if (wasteCards === 0) {
+      wasteAnalysis += "empty";
+    } else {
+      wasteAnalysis += `${wasteCards} cards`;
+      const waste = state?.waste || [];
+      if (waste.length > 0) {
+        const topCard = parseCard(waste[waste.length - 1]);
+        if (topCard) {
+          const rankName = topCard.rank === 1 ? 'A' : 
+                         topCard.rank === 11 ? 'J' :
+                         topCard.rank === 12 ? 'Q' :
+                         topCard.rank === 13 ? 'K' : topCard.rank.toString();
+          wasteAnalysis += ` - Top: ${rankName}${topCard.suit}`;
+        }
+      }
+    }
+    
+    // Count immediate moves available
+    const availableMoves = countAvailableMoves(state, Object.entries(state?.tableaux || {}).map(([index, tableau]: [string, any]) => {
+      const cards = tableau || [];
+      const faceUpCards = cards.filter((card: string) => card.endsWith('1'));
+      return {
+        index,
+        isEmpty: cards.length === 0,
+        topCard: faceUpCards.length > 0 ? parseCard(faceUpCards[faceUpCards.length - 1]) : null
+      };
+    }));
+    
+    const totalHiddenCards = Object.values(state?.tableaux || {}).reduce((sum: number, tableau: any) => {
+      return sum + (tableau || []).filter((card: string) => card.endsWith('0')).length;
+    }, 0);
+    
+    const emptySpaces = Object.values(state?.tableaux || {}).filter((tableau: any) => 
+      (tableau || []).length === 0
+    ).length;
     
     return [
-      `GAME ANALYSIS SUMMARY:`,
-      `Foundation: ${foundationTotal}/52 cards completed`,
-      `Stock: ${stockCards} cards remaining`,
-      `Waste: ${wasteCards} cards`,
-      `Tableaux: ${tableauInfo.join(', ')}`,
-      `Total cards in game: ${totalCards}`,
-      `Moves played: ${state?.moves || 0}`,
-      `Draw mode: ${state?.drawMode || 1}`,
-      `\nThis is an ACTIVE game with ${totalCards} cards in play.`
+      `POSITION ANALYSIS:`,
+      `Game Progress: ${foundationTotal}/52 cards in foundations (${progressPercent}%)`,
+      `Moves Played: ${moves}`,
+      ``,
+      `CURRENT SITUATION:`,
+      `- ${availableMoves} immediate moves available`,
+      `- ${totalHiddenCards} cards still hidden in tableaux`,
+      `- ${emptySpaces} empty tableau spaces`,
+      `- Stock: ${stockCards} cards remaining`,
+      ``,
+      `TABLEAU DETAILS:`,
+      ...tableauAnalysis,
+      ``,
+      `WASTE PILE:`,
+      wasteAnalysis,
+      ``,
+      `STRATEGIC NOTES:`,
+      `This is a ${moves <= 5 ? 'very early' : progressPercent < 20 ? 'early' : progressPercent < 50 ? 'mid' : 'late'} game position.`,
+      `Focus on: ${availableMoves === 0 ? 'drawing from stock to find moves' : 
+                   totalHiddenCards > 15 ? 'revealing hidden cards' : 
+                   emptySpaces === 0 ? 'creating empty spaces for Kings' : 
+                   'building foundation piles'}`
     ].join('\n');
     
   } catch (error) {
-    return 'Game state summary unavailable';
+    return 'Detailed analysis unavailable';
   }
+}
+
+function createEnhancedAnalysisPrompt(detailedAnalysis: string): string {
+  return `Please analyze this specific Klondike Solitaire position and provide a realistic assessment.
+
+${detailedAnalysis}
+
+Based on this SPECIFIC position, estimate how many moves it will realistically take to complete the game. Consider:
+
+1. The current progress (cards already in foundations)
+2. How many immediate moves are available right now
+3. How many hidden cards need to be revealed
+4. Whether there are empty spaces for King placement
+5. The size of the stock pile that may need cycling
+
+Do NOT give generic estimates. Analyze THIS specific position and give a realistic move count based on what you see.
+
+Remember:
+- Early positions with many hidden cards typically need 40-60 moves
+- Positions with few available moves require more stock cycling
+- Positions with good sequences and empty spaces are more efficient
+- Late game positions with most cards visible need fewer moves
+
+Provide your analysis in the requested JSON format.`;
 }
 
 function performEnhancedLocalGameAnalysis(state: any): SolverResponse {
@@ -629,4 +813,39 @@ function createErrorResponse(message: string): SolverResponse {
     aiPowered: false,
     error: message
   };
+}
+
+function createEnhancedGameStateSummary(state: any): string {
+  try {
+    const foundationTotal = Object.values(state?.foundations || {}).reduce(
+      (sum: number, foundation: any) => sum + (foundation?.length || 0), 0
+    );
+    
+    const stockCards = state?.stock?.length || 0;
+    const wasteCards = state?.waste?.length || 0;
+    
+    const tableauInfo = Object.entries(state?.tableaux || {}).map(([index, tableau]: [string, any]) => {
+      const totalCards = tableau?.length || 0;
+      return `T${index}: ${totalCards} cards`;
+    });
+    
+    const totalCards = stockCards + wasteCards + foundationTotal + 
+                      Object.values(state?.tableaux || {}).reduce((sum: number, tableau: any) => 
+                        sum + (tableau?.length || 0), 0);
+    
+    return [
+      `GAME ANALYSIS SUMMARY:`,
+      `Foundation: ${foundationTotal}/52 cards completed`,
+      `Stock: ${stockCards} cards remaining`,
+      `Waste: ${wasteCards} cards`,
+      `Tableaux: ${tableauInfo.join(', ')}`,
+      `Total cards in game: ${totalCards}`,
+      `Moves played: ${state?.moves || 0}`,
+      `Draw mode: ${state?.drawMode || 1}`,
+      `\nThis is an ACTIVE game with ${totalCards} cards in play.`
+    ].join('\n');
+    
+  } catch (error) {
+    return 'Game state summary unavailable';
+  }
 }

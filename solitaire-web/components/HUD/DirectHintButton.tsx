@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { useGameStore } from "@/lib/game-store";
 // @ts-ignore
 const { Brain, Loader2, X, Lightbulb } = require("lucide-react");
@@ -190,17 +191,21 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
         )}
       </button>
 
-      {/* Hint Panel */}
-      {showHint && hintData && (
+      {/* Hint Panel Portal */}
+      {showHint && hintData && typeof window !== 'undefined' && createPortal(
         <>
           {/* Backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-black/50 z-[999999] animate-in fade-in duration-200"
+            className="fixed inset-0 bg-black/60"
+            style={{ zIndex: 99999999 }}
             onClick={closeHint}
           />
           
           {/* Hint panel */}
-          <div className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900 border-2 border-purple-400 rounded-lg shadow-2xl z-[9999999] p-4 backdrop-blur-md animate-in slide-in-from-right-2 fade-in duration-200">
+          <div 
+            className="fixed top-6 right-6 w-96 max-w-[calc(100vw-3rem)] bg-gray-900 border-2 border-purple-400 rounded-lg shadow-2xl p-4"
+            style={{ zIndex: 99999999 + 1 }}
+          >
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Brain className="h-5 w-5 text-purple-400" />
@@ -303,7 +308,8 @@ export default function DirectHintButton({ maxHints = 5 }: DirectHintButtonProps
             </div>
           </div>
         </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Brain, TrendingUp, Eye, Zap, BookOpen, Target } from "lucide-react";
 import { type EnhancedHintResponse } from "@/lib/useHint";
@@ -47,14 +48,15 @@ export default function EnhancedHintDisplay({
     }
   };
 
-  return (
+  return typeof window !== 'undefined' ? createPortal(
     <>
       {/* Backdrop */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/30 z-[999999]"
+        className="fixed inset-0 bg-black/50"
+        style={{ zIndex: 99999999 }}
         onClick={onClose}
       />
       
@@ -63,8 +65,9 @@ export default function EnhancedHintDisplay({
         initial={{ opacity: 0, scale: 0.95, y: -20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: -20 }}
-        className="fixed top-4 right-4 w-96 max-h-[80vh] bg-gray-900/98 border-2 border-purple-400/60 
-                   rounded-xl shadow-2xl backdrop-blur-md z-[9999999] overflow-hidden"
+        className="fixed top-4 right-4 w-96 max-h-[80vh] bg-gray-900 border-2 border-purple-400 
+                   rounded-xl shadow-2xl overflow-hidden"
+        style={{ zIndex: 99999999 + 1 }}
         onClick={(e) => e.stopPropagation()}
       >
       {/* Header with tabs */}
@@ -322,6 +325,7 @@ export default function EnhancedHintDisplay({
         </div>
       </div>
       </motion.div>
-    </>
-  );
+    </>,
+    document.body
+  ) : null;
 } 
